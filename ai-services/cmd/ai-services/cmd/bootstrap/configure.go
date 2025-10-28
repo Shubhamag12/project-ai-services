@@ -43,14 +43,42 @@ func configureCmd() *cobra.Command {
 			} else {
 				logger.Info("✅ Podman already configured")
 			}
-			// 2. Configure service-report package if not done already
-			// 3. Spyre cards – run service-report
-			// 4. Check SMT level and set the SMT to 2
+			// 2. Spyre cards – run servicereport tool to validate and repair spyre configurations
+			if err := runServiceReport(); err != nil {
+				return err
+			} else {
+				logger.Info("✅ Spyre cards configuration validated successfully.")
+			}
+
+			// 3. Check SMT level and set the SMT to 2
 			logger.Info("✅ Bootstrap configuration completed successfully.")
 			return nil
 		},
 	}
 	return cmd
+}
+
+func runServiceReport() error {
+	service_report_image := "icr.io/ai-services-private/tools:latest"
+	cmd := exec.Command(
+		"podman",
+		"run",
+		"--rm",
+		"--name", "servicereport",
+		"-v", "/etc/modprobe.d:/etc/modprobe.d",
+		"-v", "/etc/modules-load.d/vfio-pci.conf:/etc/modules-load.d/vfio-pci.conf",
+		"-v", "/etc/udev/rules.d/:/etc/udev/rules.d/",
+		"-v", "/dev/vfio/:/dev/vfio",
+		"-v", "/etc/security/limits.d/:/etc/security/limits.d/",
+		service_report_image,
+		"bash", "-c", "servicereport -r -p spyre",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run servicereport tool to validate Spyre cards configuration: %v, output: %s", err, string(out))
+	}
+	logger.Sugar().Infof("ServiceReport output: %v", string(out))
+	return nil
 }
 
 func installPodman() error {
