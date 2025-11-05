@@ -31,7 +31,7 @@ var (
 	extraContainerReadinessTimeout = 5 * time.Minute
 	templateName                   string
 	envMutex                       sync.Mutex
-	downloadModels                 bool
+	skipModelDownload              bool
 )
 
 var createCmd = &cobra.Command{
@@ -131,7 +131,7 @@ var createCmd = &cobra.Command{
 		}
 
 		// Download models if flag is set to true(default: true)
-		if downloadModels {
+		if !skipModelDownload {
 			cmd.Println("Downloading models as part of application creation...")
 			models, err := helpers.ListModels(appTemplateName)
 			if err != nil {
@@ -277,7 +277,7 @@ func getTargetSMTLevel() (*int, error) {
 func init() {
 	createCmd.Flags().StringVarP(&templateName, "template", "t", "", "Template name to use (required)")
 	createCmd.MarkFlagRequired("template")
-	createCmd.Flags().BoolVarP(&downloadModels, "download-models", "d", true, "Download models during application creation. Set to false to skip model download if local models are already available at /var/lib/ai-services/models/, particularly beneficial in air-gapped networks with limited internet access. If not set correctly, the create command may fail.")
+	createCmd.Flags().BoolVar(&skipModelDownload, "skip-model-download", false, "Set to true to skip model download during application creation. This assumes local models are already available at /var/lib/ai-services/models/ and is particularly beneficial for air-gapped networks with limited internet access. If not set correctly (e.g., set to true when models are missing, or left false in an air-gapped environment), the create command may fail.")
 }
 
 // fetchAppTemplateIndex -> Returns the index of app template if exists, otherwise -1

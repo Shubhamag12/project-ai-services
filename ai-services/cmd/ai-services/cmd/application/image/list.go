@@ -6,6 +6,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +44,10 @@ func list() error {
 	dummyParams := map[string]any{
 		"AppName": "dummy-app",
 	}
-	images := []string{}
+	images := []string{
+		// include tool image as well which is used for all the housekeeping tasks
+		vars.ToolImage,
+	}
 	for _, tmpl := range tmpls {
 		ps, err := tp.LoadPodTemplate(templateName, tmpl.Name(), dummyParams)
 		if err != nil {
