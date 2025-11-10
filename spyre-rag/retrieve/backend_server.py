@@ -1,5 +1,4 @@
 import json
-
 from flask import Flask, request, jsonify, Response, stream_with_context
 import time
 from common.db_utils import MilvusVectorStore
@@ -121,8 +120,6 @@ def stream():
         })
 
 
-
-
 @app.route("/reference", methods=["POST"])
 def get_reference_docs():
     data = request.get_json()
@@ -145,7 +142,6 @@ def get_reference_docs():
             num_chunks_post_rrf,
             num_docs_reranker,
             use_reranker,
-            language="en",
             vectorstore=vectorstore
         )
     except Exception as e:
