@@ -8,6 +8,8 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/bootstrap/root"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/bootstrap/spyre"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
@@ -36,7 +38,8 @@ func configureCmd() *cobra.Command {
 }
 
 func RunConfigureCmd() error {
-	if err := rootCheck(); err != nil {
+	rootCheck := root.NewRootRule()
+	if err := rootCheck.Verify(); err != nil {
 		return err
 	}
 
@@ -71,7 +74,8 @@ func RunConfigureCmd() error {
 
 func runServiceReport() error {
 	// validate spyre attachment first before running servicereport
-	err := validateSpyreAttachment()
+	spyreCheck := spyre.NewSpyreRule()
+	err := spyreCheck.Verify()
 	if err != nil {
 		return err
 	}

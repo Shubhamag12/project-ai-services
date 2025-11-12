@@ -19,13 +19,17 @@ var startCmd = &cobra.Command{
 	Use:   "start [name]",
 	Short: "starts the application",
 	Long: `starts the application based on the application name
-		Arguments
-		- [name]: Application name (Required)
-		
-		Flags
-		- [pod]: Pod name (Optional)
-					  Can be specified multiple times: --pod=pod1 --pod=pod2
-                      Or comma-separated: --pod=pod1,pod2	
+Arguments
+- [name]: Application name (Required)
+
+Flags
+- [pod]: Pod name (Optional)
+Can be specified multiple times: --pod=pod1 --pod=pod2
+Or comma-separated: --pod=pod1,pod2	
+
+Note that the logs are streamed only when a single pod is specified and only after it has started
+Usage example:
+ai-services application start app-name --pod=pod1
 	`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
