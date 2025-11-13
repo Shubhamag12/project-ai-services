@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"github.com/containers/podman/v5/libpod/define"
 	"github.com/containers/podman/v5/pkg/bindings"
@@ -15,6 +16,7 @@ import (
 	"github.com/containers/podman/v5/pkg/bindings/kube"
 	"github.com/containers/podman/v5/pkg/bindings/pods"
 	"github.com/containers/podman/v5/pkg/domain/entities/types"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
 
 type PodmanClient struct {
@@ -157,18 +159,82 @@ func (pc *PodmanClient) PodLogs(podNameOrID string) error {
 		return errors.New("pod name or ID cannot be empty")
 	}
 
-	ctx, cancel := context.WithCancel(pc.Context)
-	defer cancel()
+	/*
+		1. Check all containers of the given pod name
+		2. Keeping listening to container logs, and output to stdout with container name as prefix
+		3. Exit on Ctrl+C
+	*/
 
-	// TODO: fetch pods logs via sdk way
-	cmdExec := exec.CommandContext(pc.Context, "podman", "pod", "logs", "-f", podNameOrID)
-	cmdExec.Stdout = os.Stdout
-	cmdExec.Stderr = os.Stderr
+	podReport, err := pods.Inspect(pc.Context, podNameOrID, &pods.InspectOptions{})
+	if err != nil {
+		return err
+	}
 
-	err := cmdExec.Run()
+	for _, ctr := range podReport.Containers {
+		err := pc.ContainerLogs(ctr.Name)
+		if err != nil {
+			return err
+		}
+	}
+
+	// cmdExec := exec.CommandContext(pc.Context, "podman", "pod", "logs", "-f", podNameOrID)
+	// cmdExec.Stdout = os.Stdout
+	// cmdExec.Stderr = os.Stderr
+
+	// err := cmdExec.Run()
 
 	// If context was cancelled (Ctrl+C), don't treat it as an error
-	if ctx.Err() == context.Canceled {
+	// if ctx.Err() == context.Canceled {
+	// 	return nil
+	// }
+
+	return nil
+}
+
+func (pc *PodmanClient) ContainerLogs(containerNameOrID string) error {
+	if containerNameOrID == "" {
+		return fmt.Errorf("container name or ID required to fetch logs")
+	}
+
+	// Creating context here that listens for Ctrl+C
+	ctx, stop := signal.NotifyContext(pc.Context, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	stdoutChan := make(chan string)
+	stderrChan := make(chan string)
+
+	opts := &containers.LogOptions{
+		Follow: utils.BoolPtr(true),
+		Stderr: utils.BoolPtr(true),
+		Stdout: utils.BoolPtr(true),
+	}
+
+	// Channel to signal goroutine completion
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case line, ok := <-stdoutChan:
+				if !ok {
+					return
+				}
+				fmt.Println(line)
+			case line, ok := <-stderrChan:
+				if !ok {
+					return
+				}
+				fmt.Fprintln(os.Stderr, line)
+			}
+		}
+	}()
+
+	err := containers.Logs(ctx, containerNameOrID, opts, stdoutChan, stderrChan)
+	<-done
+	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 		return nil
 	}
 
