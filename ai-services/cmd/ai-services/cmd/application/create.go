@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	applicationTemplatesPath = "applications/"
+	applicationPath = "applications/"
 )
 
 var (
@@ -116,14 +116,14 @@ var createCmd = &cobra.Command{
 			appTemplateName = appTemplateNames[index]
 		}
 
-		applicationPodTemplatesPath := applicationTemplatesPath + appTemplateName
+		applicationPodTemplatesPath := applicationPath + appTemplateName + "/templates"
 
 		tmpls, err := helpers.LoadAllTemplates(applicationPodTemplatesPath)
 		if err != nil {
 			return fmt.Errorf("failed to parse the templates: %w", err)
 		}
 
-		metadataFilePath := applicationPodTemplatesPath + "/metadata.yaml"
+		metadataFilePath := applicationPath + appTemplateName + "/metadata.yaml"
 
 		// load metadata.yml to fetch the dependencies list
 		appMetadata, err := helpers.LoadMetadata(metadataFilePath)
@@ -231,8 +231,19 @@ var createCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := executePodTemplates(runtime, appName, appMetadata.PodTemplateExecutions, tmpls, applicationPodTemplatesPath, pciAddresses); err != nil {
+		// execute the pod Templates
+		if err := executePodTemplates(runtime, appName, appMetadata, tmpls, applicationPodTemplatesPath, pciAddresses); err != nil {
 			return err
+		}
+
+		cmd.Printf("\n--- Successfully deployed the Application: '%s' ---\n", appName)
+		cmd.Println("-------")
+
+		// print the next steps to be performed at the end of create
+		if err := helpers.PrintNextSteps(runtime, appName, appTemplateName); err != nil {
+			// do not want to fail the overall create if we cannot print next steps
+			fmt.Printf("failed to display next steps: %v\n", err)
+			return nil
 		}
 
 		return nil
@@ -347,7 +358,7 @@ func getTargetSMTLevel() (*int, error) {
 		appTemplateName = appTemplateNames[index]
 	}
 
-	metadataFilePath := applicationTemplatesPath + appTemplateName + "/metadata.yaml"
+	metadataFilePath := applicationPath + appTemplateName + "/metadata.yaml"
 
 	appMetadata, err := helpers.LoadMetadata(metadataFilePath)
 	if err != nil {
@@ -383,18 +394,20 @@ func verifyPodTemplateExists(tmpls map[string]*template.Template, appMetadata *h
 	return nil
 }
 
-func executePodTemplates(runtime runtime.Runtime, appName string, podTemplateExecutions [][]string,
+func executePodTemplates(runtime runtime.Runtime, appName string, appMetadata *helpers.AppMetadata,
 	tmpls map[string]*template.Template, podTemplatesPath string, pciAddresses []string) error {
 
 	globalParams := map[string]any{
-		"AppName": appName,
+		"AppName":         appName,
+		"AppTemplateName": appMetadata.Name,
+		"Version":         appMetadata.Version,
 		// Key -> container name
 		// Value -> range of key-value env pairs
 		"env": map[string]map[string]string{},
 	}
 
 	// looping over each layer of podTemplateExecutions
-	for i, layer := range podTemplateExecutions {
+	for i, layer := range appMetadata.PodTemplateExecutions {
 		fmt.Printf("\n Executing Layer %d: %v\n", i+1, layer)
 		fmt.Println("-------")
 		var wg sync.WaitGroup

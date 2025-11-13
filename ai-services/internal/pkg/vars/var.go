@@ -10,3 +10,11 @@ var (
 	ToolImage                          = "icr.io/ai-services-private/tools:latest"
 	ModelDirectory                     = "/var/lib/ai-services/models"
 )
+
+type Label string
+
+var (
+	PodPortLabel  Label = "ai-services.io/port/%s"
+	TemplateLabel Label = "ai-services.io/template"
+	VersionLabel  Label = "ai-services.io/version"
+)

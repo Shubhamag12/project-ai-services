@@ -34,10 +34,10 @@ func FetchApplicationTemplatesNames() ([]string, error) {
 			return nil
 		}
 
-		// Templates Pattern :- "assets/applications/<AppName>/*.yaml.tmpl"
+		// Templates Pattern :- "assets/applications/<AppName>/templates/*.yaml.tmpl"
 		parts := strings.Split(path, "/")
 
-		if len(parts) >= 3 {
+		if len(parts) >= 4 {
 			appName := parts[1]
 			if slices.Contains(apps, appName) {
 				return nil
@@ -136,7 +136,8 @@ func FetchContainerStartPeriod(runtime runtime.Runtime, containerNameOrId string
 }
 
 type AppMetadata struct {
-	// TODO: Include other variables too
+	Name                  string     `yaml:"name,omitempty"`
+	Version               string     `yaml:"version,omitempty"`
 	SMTLevel              *int       `yaml:"smtLevel,omitempty"`
 	PodTemplateExecutions [][]string `yaml:"podTemplateExecutions"`
 }
