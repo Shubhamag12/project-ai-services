@@ -3,9 +3,11 @@ module github.com/project-ai-services/ai-services
 go 1.24.1
 
 require (
+	github.com/briandowns/spinner v1.23.2
 	github.com/containers/podman/v5 v5.6.2
+	github.com/fatih/color v1.15.0
+	github.com/jedib0t/go-pretty/v6 v6.7.1
 	github.com/spf13/cobra v1.9.1
-	github.com/yarlson/pin v0.9.1
 	k8s.io/klog/v2 v2.130.1
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -61,7 +63,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.7.1 // indirect
 	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
@@ -70,6 +71,8 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/letsencrypt/boulder v0.0.0-20240620165639-de9c06129bec // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect

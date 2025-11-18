@@ -2,47 +2,53 @@ package spinner
 
 import (
 	"context"
+	"time"
 
-	"github.com/yarlson/pin"
+	"github.com/briandowns/spinner"
+	"github.com/fatih/color"
 )
 
 type Spinner struct {
-	p      *pin.Pin
-	ctx    context.Context
-	cancel context.CancelFunc
+	s *spinner.Spinner
 }
 
 func New(message string) *Spinner {
-	p := pin.New(message,
-		pin.WithDoneSymbol('✔'),
-		pin.WithDoneSymbolColor(pin.ColorGreen),
-		pin.WithFailSymbol('✖'),
-		pin.WithFailSymbolColor(pin.ColorRed),
-	)
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " " + message
+	s.FinalMSG = ""
+
 	return &Spinner{
-		p: p,
+		s: s,
 	}
 }
 
-func (s *Spinner) Start(ctx context.Context) {
-	s.ctx = ctx
-	s.cancel = s.p.Start(ctx)
+func (sp *Spinner) Start(ctx context.Context) {
+	sp.s.Start()
+
+	go func() {
+		<-ctx.Done()
+		if sp.s.Active() {
+			sp.s.Stop()
+		}
+	}()
 }
 
-func (s *Spinner) Stop(message string) {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	s.p.Stop(message)
+func (sp *Spinner) Stop(message string) {
+	green := color.New(color.FgGreen).SprintFunc()
+	sp.s.FinalMSG = green("✔") + " " + message + "\n"
+	sp.s.Stop()
 }
 
-func (s *Spinner) Fail(message string) {
-	if s.cancel != nil {
-		s.cancel()
-	}
-	s.p.Fail(message)
+func (sp *Spinner) Fail(message string) {
+	red := color.New(color.FgRed).SprintFunc()
+	sp.s.FinalMSG = red("✖") + " " + message + "\n"
+	sp.s.Stop()
 }
 
-func (s *Spinner) UpdateMessage(message string) {
-	s.p.UpdateMessage(message)
+func (sp *Spinner) UpdateMessage(message string) {
+	sp.s.Suffix = " " + message
+}
+
+func (sp *Spinner) IsRunning() bool {
+	return sp.s.Active()
 }
