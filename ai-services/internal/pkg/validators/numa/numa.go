@@ -39,7 +39,8 @@ func (r *NumaRule) Verify() error {
 	}
 
 	if numaCount != 1 {
-		return fmt.Errorf("numa node on LPAR is %d, please set NUMA node to 1", numaCount)
+		logger.Warningf("NUMA node on LPAR is %d, please set NUMA node to 1", numaCount)
+		return nil
 	}
 
 	return nil

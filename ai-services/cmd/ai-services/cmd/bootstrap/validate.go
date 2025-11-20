@@ -102,6 +102,9 @@ func RunValidateCmd(skip map[string]bool) error {
 	for _, rule := range validators.DefaultRegistry.Rules() {
 		ruleName := rule.Name()
 		if skip[ruleName] {
+			if ruleName == CheckNUMA {
+				logger.Warningln("Skipping NUMA check, the tool may behave differently if NUMA node is not set to 1")
+			}
 			continue
 		}
 
