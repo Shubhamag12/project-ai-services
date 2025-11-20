@@ -22,8 +22,7 @@ const (
 	CheckNUMA   = "numa"
 )
 
-// TODO: Populate this once we have the link
-const troubleshootingGuide = ""
+const troubleshootingGuide = "https://ibmdocs-test.dcs.ibm.com/docs/en/aiservices?topic=services-troubleshooting"
 
 // validateCmd represents the validate subcommand of bootstrap
 func validateCmd() *cobra.Command {
@@ -112,9 +111,11 @@ func RunValidateCmd(skip map[string]bool) error {
 
 		if err != nil {
 			s.Fail(err.Error())
+			s.StopWithHint(err.Error(), rule.Hint())
 
 			// exit right away if user is not root as other check require root privileges
 			if ruleName == CheckRoot {
+				rule.Hint()
 				return fmt.Errorf("root privileges are required for validation")
 			}
 			validationErrors = append(validationErrors, fmt.Errorf("%s: %w", ruleName, err))

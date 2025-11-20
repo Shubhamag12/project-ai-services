@@ -26,6 +26,7 @@ type Rule interface {
 	Verify() error
 	Message() string
 	Name() string
+	Hint() string
 }
 
 // DefaultRegistry is the default registry instance that holds all registered checks.

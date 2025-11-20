@@ -7,9 +7,9 @@ import (
 	"github.com/containers/podman/v5/pkg/domain/entities/types"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
-	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/spf13/cobra"
 
+	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
 )
@@ -31,60 +31,69 @@ var psCmd = &cobra.Command{
 			return fmt.Errorf("failed to connect to podman: %w", err)
 		}
 
-		listFilters := map[string][]string{}
-		if applicationName != "" {
-			listFilters["label"] = []string{fmt.Sprintf("ai-services.io/application=%s", applicationName)}
-		}
-
-		resp, err := runtimeClient.ListPods(listFilters)
+		err = runPsCmd(runtimeClient, applicationName)
 		if err != nil {
-			return fmt.Errorf("failed to list pods: %w", err)
+			return fmt.Errorf("failed to fetch application: %w", err)
 		}
 
-		// TODO: Avoid doing the type assertion and importing types package from podman
-
-		var pods []*types.ListPodsReport
-		if val, ok := resp.([]*types.ListPodsReport); ok {
-			pods = val
-		}
-
-		if len(pods) == 0 && applicationName != "" {
-			logger.Infof("No Pods found for the given application name: %s", applicationName)
-			return nil
-		}
-
-		p := helpers.NewTableWriter()
-		defer p.CloseTableWriter()
-
-		t := p.GetTableWriter()
-		t.AppendHeader(table.Row{"Application Name", "Pod ID", "Pod Name", "Status", "Exposed"})
-		t.SetColumnConfigs([]table.ColumnConfig{
-			{Number: 4, Align: text.AlignCenter},
-		})
-
-		for _, pod := range pods {
-			podPorts := []string{}
-			pInfo, err := runtimeClient.InspectPod(pod.Id)
-			if err != nil {
-				continue
-			}
-
-			if pInfo.InfraConfig == nil || pInfo.InfraConfig.PortBindings == nil {
-				continue
-			}
-
-			for _, ports := range pInfo.InfraConfig.PortBindings {
-				for _, port := range ports {
-					podPorts = append(podPorts, port.HostPort)
-				}
-			}
-			if len(podPorts) == 0 {
-				podPorts = append(podPorts, "none")
-			}
-			t.AppendRow(table.Row{fetchPodNameFromLabels(pod.Labels), pod.Id, pod.Name, pod.Status, strings.Join(podPorts, ", ")})
-		}
 		return nil
 	},
+}
+
+func runPsCmd(client *podman.PodmanClient, appName string) error {
+	listFilters := map[string][]string{}
+	if appName != "" {
+		listFilters["label"] = []string{fmt.Sprintf("ai-services.io/application=%s", appName)}
+	}
+
+	resp, err := client.ListPods(listFilters)
+	if err != nil {
+		return fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	// TODO: Avoid doing the type assertion and importing types package from podman
+
+	var pods []*types.ListPodsReport
+	if val, ok := resp.([]*types.ListPodsReport); ok {
+		pods = val
+	}
+
+	if len(pods) == 0 && appName != "" {
+		logger.Infof("No Pods found for the given application name: %s", appName)
+		return nil
+	}
+
+	p := helpers.NewTableWriter()
+	defer p.CloseTableWriter()
+
+	t := p.GetTableWriter()
+	t.AppendHeader(table.Row{"Application Name", "Pod ID", "Pod Name", "Status", "Exposed"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 4, Align: text.AlignCenter},
+	})
+
+	for _, pod := range pods {
+		podPorts := []string{}
+		pInfo, err := client.InspectPod(pod.Id)
+		if err != nil {
+			continue
+		}
+
+		if pInfo.InfraConfig == nil || pInfo.InfraConfig.PortBindings == nil {
+			continue
+		}
+
+		for _, ports := range pInfo.InfraConfig.PortBindings {
+			for _, port := range ports {
+				podPorts = append(podPorts, port.HostPort)
+			}
+		}
+		if len(podPorts) == 0 {
+			podPorts = append(podPorts, "none")
+		}
+		t.AppendRow(table.Row{fetchPodNameFromLabels(pod.Labels), pod.Id, pod.Name, pod.Status, strings.Join(podPorts, ", ")})
+	}
+	return nil
 }
 
 func fetchPodNameFromLabels(labels map[string]string) string {

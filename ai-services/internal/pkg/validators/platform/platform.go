@@ -66,3 +66,7 @@ func (r *PlatformRule) Verify() error {
 func (r *PlatformRule) Message() string {
 	return "Operating system is RHEL with version 9.6"
 }
+
+func (r *PlatformRule) Hint() string {
+	return "This tool requires RHEL version 9.6, please install or upgrade to a supported platform"
+}

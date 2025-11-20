@@ -48,3 +48,7 @@ func (r *NumaRule) Verify() error {
 func (r *NumaRule) Message() string {
 	return "NUMA node alignment on LPAR: 1"
 }
+
+func (r *NumaRule) Hint() string {
+	return "This tools requires numa node set on 1 on LPAR"
+}

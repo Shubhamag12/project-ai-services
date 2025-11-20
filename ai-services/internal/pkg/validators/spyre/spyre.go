@@ -35,3 +35,7 @@ func (r *SpyreRule) Verify() error {
 func (r *SpyreRule) Message() string {
 	return "IBM Spyre Accelerator is attached to the LPAR"
 }
+
+func (r *SpyreRule) Hint() string {
+	return "IBM Spyre Accelerator hardware is required but not detected."
+}

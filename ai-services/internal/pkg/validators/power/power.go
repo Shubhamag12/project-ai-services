@@ -37,3 +37,7 @@ func (r *PowerRule) Verify() error {
 func (r *PowerRule) Message() string {
 	return "System is running on IBM Power11 (ppc64le)"
 }
+
+func (r *PowerRule) Hint() string {
+	return "This tools requires IBM Power11 (ppc64le)"
+}

@@ -32,3 +32,7 @@ func (r *RootRule) Verify() error {
 func (r *RootRule) Message() string {
 	return "Current user is root"
 }
+
+func (r *RootRule) Hint() string {
+	return "Run this command with root privileges using 'sudo' or as the root user"
+}

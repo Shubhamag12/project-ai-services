@@ -40,3 +40,7 @@ func (r *RHNRule) Verify() error {
 func (r *RHNRule) Message() string {
 	return "System is registered with RHN"
 }
+
+func (r *RHNRule) Hint() string {
+	return "Register your system with Red Hat Network using: subscription-manager register --username <username> --password <password> "
+}
