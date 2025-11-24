@@ -30,23 +30,17 @@ Available subcommands:
   # Get help on a specific subcommand
   aiservices bootstrap validate --help`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			err := root.NewRootRule().Verify()
-			if err != nil {
-				return err
-			}
-			return nil
+			return root.NewRootRule().Verify()
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 
 			logger.Infof("Configuring the LPAR")
-			configureErr := RunConfigureCmd()
-			if configureErr != nil {
+			if configureErr := RunConfigureCmd(); configureErr != nil {
 				return fmt.Errorf("failed to bootstrap the LPAR: %w", configureErr)
 			}
 
 			logger.Infof("Validating LPAR")
-			validateErr := RunValidateCmd(nil)
-			if validateErr != nil {
+			if validateErr := RunValidateCmd(nil); validateErr != nil {
 				return fmt.Errorf("failed to bootstrap the LPAR: %w", validateErr)
 			}
 
