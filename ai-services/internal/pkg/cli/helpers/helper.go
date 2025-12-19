@@ -215,7 +215,7 @@ func ParseSkipChecks(skipChecks []string) map[string]bool {
 
 // CheckExistingPodsForApplication checks if there are pods already existing for the given application name
 func CheckExistingPodsForApplication(runtime runtime.Runtime, appName string) ([]string, error) {
-	// var podsExists bool
+	//nolint:prealloc // as capacity is unknown and depends on runtime.ListPods response
 	var podsToSkip []string
 	resp, err := runtime.ListPods(map[string][]string{
 		"label": {fmt.Sprintf("ai-services.io/application=%s", appName)},
