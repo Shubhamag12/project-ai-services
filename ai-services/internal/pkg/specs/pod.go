@@ -11,5 +11,6 @@ func FetchContainerNames(podspec models.PodSpec) []string {
 	for _, v1Container := range podspec.Spec.Containers {
 		containerNames = append(containerNames, v1Container.Name)
 	}
+
 	return containerNames
 }

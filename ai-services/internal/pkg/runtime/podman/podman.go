@@ -42,6 +42,7 @@ func NewPodmanClient() (*PodmanClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &PodmanClient{Context: ctx}, nil
 }
 
@@ -57,6 +58,7 @@ func (pc *PodmanClient) PullImage(image string, options *images.PullOptions) err
 		return fmt.Errorf("failed to pull image %s: %w", image, err)
 	}
 	logger.Infof("Successfully pulled image %s\n", image)
+
 	return nil
 }
 
@@ -163,6 +165,7 @@ func (pc *PodmanClient) InspectPod(nameOrID string) (*types.PodInspectReport, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect the pod: %w", err)
 	}
+
 	return podInspectReport, nil
 }
 

@@ -81,6 +81,7 @@ func extractPodIDsFromOutput(output string) []string {
 		id := strings.TrimSpace(line)
 		ids = append(ids, id)
 	}
+
 	return ids
 }
 

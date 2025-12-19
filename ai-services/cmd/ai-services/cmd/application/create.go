@@ -87,6 +87,7 @@ var createCmd = &cobra.Command{
 		}
 
 		appName := args[0]
+
 		return utils.VerifyAppName(appName)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -123,6 +124,7 @@ var createCmd = &cobra.Command{
 		err = setSMTLevel()
 		if err != nil {
 			s.Fail("failed to set SMT level")
+
 			return fmt.Errorf("failed to set SMT level: %w", err)
 		}
 		s.Stop("SMT level configured successfully")
@@ -164,6 +166,7 @@ var createCmd = &cobra.Command{
 		// if all the pods for given application are already deployed, just log and do not proceed further
 		if len(existingPods) == len(tmpls) {
 			logger.Infof("Pods for given app: %s are already deployed. Please use 'ai-services application ps %s' to see the pods deployed\n", appName, appName)
+
 			return nil
 		}
 
@@ -202,6 +205,7 @@ var createCmd = &cobra.Command{
 			models, err := helpers.ListModels(templateName, appName)
 			if err != nil {
 				s.Fail("failed to list models")
+
 				return err
 			}
 			logger.Infoln("Downloading models required for application template " + templateName + ":")
@@ -212,6 +216,7 @@ var createCmd = &cobra.Command{
 				})
 				if err != nil {
 					s.Fail("failed to download model: " + model)
+
 					return fmt.Errorf("failed to download model: %w", err)
 				}
 			}
@@ -237,6 +242,7 @@ var createCmd = &cobra.Command{
 		if err := helpers.PrintNextSteps(runtime, appName, templateName); err != nil {
 			// do not want to fail the overall create if we cannot print next steps
 			logger.Infof("failed to display next steps: %v\n", err)
+
 			return nil
 		}
 
@@ -295,6 +301,7 @@ func downloadImagesForTemplate(runtime runtime.Runtime, templateName, appName st
 		}
 		logger.Infoln("All required container images are present locally.")
 	}
+
 	return nil
 }
 
@@ -366,6 +373,7 @@ func getSMTLevel(output string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse SMT level: %w", err)
 	}
+
 	return SMTlevel, nil
 }
 
@@ -400,6 +408,7 @@ func setSMTLevel() error {
 	if targetSMTLevel == nil {
 		// No SMT level specified in metadata.yaml
 		logger.Infof("No SMT level specified in metadata.yaml. Keeping it to current level: %d\n", currentSMTlevel)
+
 		return nil
 	}
 
@@ -407,6 +416,7 @@ func setSMTLevel() error {
 	if currentSMTlevel == *targetSMTLevel {
 		// already set
 		logger.Infof("SMT level is already set to %d\n", *targetSMTLevel)
+
 		return nil
 	}
 
@@ -433,6 +443,7 @@ func setSMTLevel() error {
 	if currentSMTlevel != *targetSMTLevel {
 		return fmt.Errorf("SMT level verification failed: expected %d, got %d", targetSMTLevel, currentSMTlevel)
 	}
+
 	return nil
 }
 
@@ -507,6 +518,7 @@ func executePodTemplates(runtime runtime.Runtime, tp templates.Template, appName
 
 				if slices.Contains(existingPods, podSpec.Name) {
 					logger.Infof("%s: Skipping pod deploy as '%s' it already exists", podTemplateName, podSpec.Name)
+
 					return
 				}
 
@@ -614,6 +626,7 @@ func deployPodAndReadinessCheck(runtime runtime.Runtime, podSpec *models.PodSpec
 
 			if startPeriod == -1 {
 				logger.Infof("No container health check is set for '%s'. Hence skipping readiness check\n", cInfo.Name, 2)
+
 				continue
 			}
 
@@ -633,6 +646,7 @@ func deployPodAndReadinessCheck(runtime runtime.Runtime, podSpec *models.PodSpec
 	}
 
 	logger.Infoln("-------\n-------")
+
 	return nil
 }
 
@@ -640,6 +654,7 @@ func validateSpyreCardRequirements(req int, actual int) error {
 	if actual < req {
 		return fmt.Errorf("insufficient spyre cards. Require: %d spyre cards to proceed", req)
 	}
+
 	return nil
 }
 
@@ -662,6 +677,7 @@ func calculateReqSpyreCards(client *podman.PodmanClient, tp templates.Template, 
 
 		if exists {
 			logger.Infof("Pod %s already exists, skipping spyre cards calculation", podSpec.Name, 2)
+
 			continue
 		}
 
@@ -687,6 +703,7 @@ func fetchSpyreCardsFromPodAnnotations(annotations map[string]string) (int, map[
 		if matches == nil {
 			return "", false
 		}
+
 		return matches[1], true
 	}
 
@@ -758,6 +775,7 @@ func checkForPodStartAnnotation(podAnnotations map[string]string) string {
 			return val
 		}
 	}
+
 	return ""
 }
 
@@ -802,6 +820,7 @@ func fetchHostPortMappingFromAnnotation(podAnnotations map[string]string) map[st
 		if i == -1 {
 			// No colon → whole thing is the containerPort
 			hostPortMapping[p] = ""
+
 			continue
 		}
 

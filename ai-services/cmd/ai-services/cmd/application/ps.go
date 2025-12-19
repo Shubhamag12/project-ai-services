@@ -83,6 +83,7 @@ func runPsCmd(runtimeClient *podman.PodmanClient, appName string) error {
 
 	if len(pods) == 0 && appName != "" {
 		logger.Infof("No Pods found for the given application name: %s", appName)
+
 		return nil
 	}
 
@@ -106,6 +107,7 @@ func runPsCmd(runtimeClient *podman.PodmanClient, appName string) error {
 		if err != nil {
 			// log and skip pod if inspect failed
 			logger.Errorf("Failed to do pod inspect: '%s' with error: %v", pod.Id, err)
+
 			continue
 		}
 
@@ -133,6 +135,7 @@ func runPsCmd(runtimeClient *podman.PodmanClient, appName string) error {
 			)
 		}
 	}
+
 	return nil
 }
 
@@ -166,6 +169,7 @@ func getContainerNames(runtimeClient *podman.PodmanClient, pod *types.ListPodsRe
 		if err != nil {
 			// skip container if inspect failed
 			logger.Infof("failed to do container inspect for pod: '%s', containerID: '%s' with error: %v", pod.Name, container.Id, err, 2)
+
 			continue
 		}
 
@@ -192,6 +196,7 @@ func getPodStatus(runtimeClient *podman.PodmanClient, pInfo *types.PodInspectRep
 			if err != nil {
 				// skip container if inspect failed
 				logger.Infof("failed to do container inspect for pod: '%s', containerID: '%s' with error: %v", pInfo.Name, container.ID, err, 2)
+
 				continue
 			}
 

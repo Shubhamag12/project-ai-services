@@ -61,6 +61,7 @@ Available subcommands:
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color("#32BD27"))
 			message := style.Render("Re-login to the shell to reflect necessary permissions assigned to vfio cards")
 			logger.Infoln(message)
+
 			return nil
 		},
 	}

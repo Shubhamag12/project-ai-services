@@ -23,6 +23,7 @@ func FlattenArray[T comparable](arr [][]T) []T {
 	for _, row := range arr {
 		flatArr = append(flatArr, row...)
 	}
+
 	return flatArr
 }
 
@@ -32,6 +33,7 @@ func ExtractMapKeys[K comparable, V any](m map[K]V) []K {
 	for k := range m {
 		keys = append(keys, k)
 	}
+
 	return keys
 }
 
@@ -40,6 +42,7 @@ func ExtractMapKeys[K comparable, V any](m map[K]V) []K {
 func CopyMap[K comparable, V any](src map[K]V) map[K]V {
 	dst := make(map[K]V, len(src))
 	maps.Copy(dst, src)
+
 	return dst
 }
 
@@ -69,6 +72,7 @@ func UniqueSlice[T comparable](slice []T) []T {
 			result = append(result, item)
 		}
 	}
+
 	return result
 }
 
@@ -98,6 +102,7 @@ func FileExists(path string) bool {
 		return false
 	}
 	logger.Errorf("Error checking file existence: %v\n", err)
+
 	return false
 }
 
@@ -123,6 +128,7 @@ func isHidden(n *yaml.Node) bool {
 	if n == nil {
 		return false
 	}
+
 	return strings.Contains(n.HeadComment, "@hidden")
 }
 
@@ -139,6 +145,7 @@ func getDescription(n *yaml.Node) string {
 	}
 
 	desc := comment[idx+len("@description"):]
+
 	return strings.TrimSpace(desc)
 }
 
@@ -227,6 +234,7 @@ func VerifyAppName(appName string) error {
 	if appName == "" || strings.Contains(appName, "..") || strings.ContainsAny(appName, "/\\") {
 		return fmt.Errorf("invalid application name: %s", appName)
 	}
+
 	return nil
 }
 
@@ -241,6 +249,7 @@ func ValidateParams(params map[string]string, supportedParams map[string]any) er
 			return fmt.Errorf("unsupported parameter: %s", key)
 		}
 	}
+
 	return nil
 }
 
@@ -279,5 +288,6 @@ func checkParamsInValues(param string, values map[string]any) bool {
 		// Move the pointer deeper for the next iteration
 		current = cast
 	}
+
 	return false
 }
