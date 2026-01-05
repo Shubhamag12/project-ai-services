@@ -482,7 +482,6 @@ func verifyPodTemplateExists(tmpls map[string]*template.Template, appMetadata *t
 
 func executePodTemplateLayer(runtime runtime.Runtime, tp templates.Template, tmpls map[string]*template.Template,
 	globalParams map[string]any, pciAddresses []string, existingPods []string, podTemplateName, appName string) error {
-
 	logger.Infof("'%s': Processing template...\n", podTemplateName)
 
 	// Shallow Copy globalParams Map
