@@ -41,9 +41,12 @@ Available subcommands:
   # Get help on a specific subcommand
   ai-services bootstrap validate --help`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			return root.NewRootRule().Verify()
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
+
 			logger.Infof("Configuring the LPAR")
 			if configureErr := RunConfigureCmd(); configureErr != nil {
 				return fmt.Errorf("failed to bootstrap the LPAR: %w", configureErr)
