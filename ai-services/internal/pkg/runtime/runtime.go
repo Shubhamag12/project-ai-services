@@ -70,16 +70,4 @@ func CreateRuntime(runtimeType types.RuntimeType) (Runtime, error) {
 	}
 }
 
-// CreateRuntimeWithNamespace creates a runtime with a specific namespace (for Openshift).
-func CreateRuntimeWithNamespace(runtimeType types.RuntimeType, namespace string) (Runtime, error) {
-	switch runtimeType {
-	case types.RuntimeTypePodman:
-		// Podman doesn't use namespaces in the same way
-		return CreateRuntime(runtimeType)
-
-	default:
-		return nil, fmt.Errorf("unsupported runtime type: %s", runtimeType)
-	}
-}
-
 // Made with Bob
