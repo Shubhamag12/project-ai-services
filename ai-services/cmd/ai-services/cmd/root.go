@@ -29,13 +29,14 @@ var RootCmd = &cobra.Command{
 	Long:    `A CLI tool for managing AI Services infrastructure.`,
 	Version: version.GetVersion(),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		// Ensures logs flush after each command run
 		logger.Infoln("Logger initialized (PersistentPreRun)", logger.VerbosityLevelDebug)
 
 		// Initialize runtime factory based on flag or environment
 		rt := types.RuntimeType(runtimeType)
 		if !rt.Valid() {
-			return fmt.Errorf("invalid runtime type: %s (must be 'podman' or 'kubernetes')", runtimeType)
+			return fmt.Errorf("invalid runtime type: %s (must be 'podman')", runtimeType)
 		}
 
 		RuntimeFactory = runtime.NewRuntimeFactory(rt)
