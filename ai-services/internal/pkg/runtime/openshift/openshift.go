@@ -88,9 +88,20 @@ func (kc *OpenshiftClient) PullImage(image string) error {
 
 // ListPods lists pods with optional filters.
 func (kc *OpenshiftClient) ListPods(filters map[string][]string) ([]types.Pod, error) {
-	logger.Warningln("yet to implement")
+	// Convert filters to label selector
+	var labelSelector string
+	if labelFilters, exists := filters["label"]; exists && len(labelFilters) > 0 {
+		labelSelector = strings.Join(labelFilters, ",")
+	}
 
-	return nil, nil
+	podList, err := kc.clientset.CoreV1().Pods(kc.namespace).List(kc.ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	return toOpenshiftPodList(podList), nil
 }
 
 // CreatePod creates a pod from YAML manifest.
