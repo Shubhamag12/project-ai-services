@@ -58,6 +58,7 @@ func CreateBootstrap(runtimeType types.RuntimeType) (Bootstrap, error) {
 	switch runtimeType {
 	case types.RuntimeTypePodman:
 		logger.Infof("Initializing Podman bootstrap\n", logger.VerbosityLevelDebug)
+
 		return podman.NewPodmanBootstrap(), nil
 
 	default:

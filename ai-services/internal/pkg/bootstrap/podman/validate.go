@@ -18,6 +18,7 @@ func (p *PodmanBootstrap) Validate(skip map[string]bool) error {
 		ruleName := rule.Name()
 		if skip[ruleName] {
 			logger.Warningf("%s check skipped; Proceeding without validation may result in deployment failure.", ruleName)
+
 			continue
 		}
 
@@ -51,5 +52,6 @@ func (p *PodmanBootstrap) Validate(skip map[string]bool) error {
 	}
 
 	logger.Infoln("All validations passed")
+
 	return nil
 }

@@ -54,8 +54,10 @@ func validateCmd() *cobra.Command {
 			logger.Infof("Validating for runtime: %s", factory.GetRuntimeType())
 			if err := bootstrapInstance.Validate(skip); err != nil {
 				logger.Infof("Please refer to troubleshooting guide for more information: %s", troubleshootingGuide)
+
 				return fmt.Errorf("bootstrap validation failed: %w", err)
 			}
+
 			return nil
 		},
 	}
