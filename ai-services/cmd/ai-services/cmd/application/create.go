@@ -27,7 +27,6 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/models"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
-	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/specs"
 	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
@@ -119,15 +118,8 @@ var createCmd = &cobra.Command{
 		// Validate the LPAR before creating the application
 		logger.Infof("Validating the LPAR environment before creating application '%s'...\n", appName)
 
-		// Create bootstrap instance and validate
-		runtimeType, err := cmd.Flags().GetString("runtime")
-		if err != nil {
-			return fmt.Errorf("failed to get runtime flag: %w", err)
-		}
-		rt := types.RuntimeType(runtimeType)
-
 		// Create bootstrap instance based on runtime
-		factory := bootstrap.NewBootstrapFactory(rt)
+		factory := bootstrap.NewBootstrapFactory(vars.RuntimeFactory.GetRuntimeType())
 		bootstrapInstance, err := factory.Create()
 		if err != nil {
 			return fmt.Errorf("failed to create bootstrap instance: %w", err)
