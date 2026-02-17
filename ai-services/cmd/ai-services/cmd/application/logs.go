@@ -5,7 +5,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
-	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
+	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 	"github.com/spf13/cobra"
 )
 
@@ -29,11 +29,7 @@ var logsCmd = &cobra.Command{
 		// Once precheck passes, silence usage for any *later* internal errors.
 		cmd.SilenceUsage = true
 
-		runtimeType, err := cmd.Flags().GetString("runtime")
-		if err != nil {
-			return fmt.Errorf("failed to get runtime flag: %w", err)
-		}
-		rt := types.RuntimeType(runtimeType)
+		rt := vars.RuntimeFactory.GetRuntimeType()
 
 		// Create application instance using factory
 		factory := application.NewFactory(rt)
