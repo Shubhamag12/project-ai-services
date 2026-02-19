@@ -41,13 +41,11 @@ func applyYamls(ctx context.Context, c client.Client) error {
 	s.Start(ctx)
 
 	for _, yaml := range yamls {
-
 		if err := utils.ApplyYaml(ctx, yaml, c); err != nil {
 			s.Fail("failed to apply YAML")
 
 			return fmt.Errorf("failed to apply YAML %s: %w", string(yaml), err)
 		}
-
 	}
 	s.Stop("YAMLs Applied")
 
