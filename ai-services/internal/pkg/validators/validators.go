@@ -4,25 +4,30 @@ import (
 	"sync"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/numa"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/platform"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/power"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/rhn"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/root"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/servicereport"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/spyre"
+	operators "github.com/project-ai-services/ai-services/internal/pkg/validators/openshift"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/numa"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/platform"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/power"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/rhn"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/root"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/servicereport"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/spyre"
 )
 
 // Initialize the default registry with built-in rules.
 func init() {
+	// Podman checks
 	// adding root rule on top to verify this check first
-	DefaultRegistry.Register(root.NewRootRule())
-	DefaultRegistry.Register(numa.NewNumaRule())
-	DefaultRegistry.Register(platform.NewPlatformRule())
-	DefaultRegistry.Register(power.NewPowerRule())
-	DefaultRegistry.Register(rhn.NewRHNRule())
-	DefaultRegistry.Register(spyre.NewSpyreRule())
-	DefaultRegistry.Register(servicereport.NewServiceReportRule())
+	PodmanDefaultRegistry.Register(root.NewRootRule())
+	PodmanDefaultRegistry.Register(numa.NewNumaRule())
+	PodmanDefaultRegistry.Register(platform.NewPlatformRule())
+	PodmanDefaultRegistry.Register(power.NewPowerRule())
+	PodmanDefaultRegistry.Register(rhn.NewRHNRule())
+	PodmanDefaultRegistry.Register(spyre.NewSpyreRule())
+	PodmanDefaultRegistry.Register(servicereport.NewServiceReportRule())
+
+	// OpenshiftChecks
+	OpenshiftDefaultRegistry.Register(operators.NewOperatorRule())
 }
 
 // Rule defines the interface for validation rules.
@@ -36,7 +41,8 @@ type Rule interface {
 }
 
 // DefaultRegistry is the default registry instance that holds all registered checks.
-var DefaultRegistry = NewValidationRegistry()
+var PodmanDefaultRegistry = NewValidationRegistry()
+var OpenshiftDefaultRegistry = NewValidationRegistry()
 
 // ValidationRegistry holds the list of checks.
 type ValidationRegistry struct {

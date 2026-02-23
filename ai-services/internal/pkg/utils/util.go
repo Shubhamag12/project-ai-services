@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"net"
@@ -8,11 +9,18 @@ import (
 	"strings"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
+	"github.com/project-ai-services/ai-services/internal/pkg/runtime/openshift"
 	"go.yaml.in/yaml/v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
 	maxKeyValueParts = 2
+	olmGroup         = "operators.coreos.com"
+	olmVersion       = "v1alpha1"
+	olmCSVList       = "ClusterServiceVersionList"
+	phaseSucceeded   = "Succeeded"
 )
 
 // BoolPtr -> converts to bool ptr.
@@ -299,4 +307,49 @@ func checkParamsInValues(param string, values map[string]any) bool {
 	}
 
 	return false
+}
+
+func ValidateOperator(ctx context.Context, operatorSubstring string) error {
+	csvList := &unstructured.UnstructuredList{}
+
+	csvList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   olmGroup,
+		Version: olmVersion,
+		Kind:    olmCSVList,
+	})
+
+	client, err := openshift.NewOpenshiftClient()
+	if err != nil {
+		return fmt.Errorf("failed to validate openshift cluster: %w", err)
+	}
+
+	if err := client.Client.List(ctx, csvList); err != nil {
+		return fmt.Errorf("failed to list ClusterServiceVersions: %w", err)
+	}
+
+	for _, csv := range csvList.Items {
+		name := csv.GetName()
+
+		if !strings.Contains(strings.ToLower(name), strings.ToLower(operatorSubstring)) {
+			continue
+		}
+
+		phase, _, _ := unstructured.NestedString(
+			csv.Object,
+			"status",
+			"phase",
+		)
+
+		if phase == phaseSucceeded {
+			return nil
+		}
+
+		return fmt.Errorf(
+			"operator %s found but not ready (phase=%s)",
+			name,
+			phase,
+		)
+	}
+
+	return fmt.Errorf("operator not installed: %s", operatorSubstring)
 }
