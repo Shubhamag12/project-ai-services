@@ -31,7 +31,7 @@ func validateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "validate",
 		Short:   "Validates the environment",
-		Long:    longDescription(),
+		Long:    validateDescription(),
 		Example: validateExample(),
 		Hidden:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,13 +62,17 @@ func validateCmd() *cobra.Command {
 	return cmd
 }
 
-func longDescription() string {
-	validationList := generateValidationList()
+func validateDescription() string {
+	podmanList, openshiftList := generateValidationList()
 
 	return fmt.Sprintf(`Validates all prerequisites and configurations are correct for bootstrapping. 
 
 Following scenarios are validated and are available for skipping using --skip-validation flag:
-%s`, validationList)
+- For podman:
+%s
+
+- For openshift:
+%s`, podmanList, openshiftList)
 }
 
 func validateExample() string {
@@ -85,12 +89,20 @@ func validateExample() string {
   ai-services bootstrap validate --verbose`
 }
 
-func generateValidationList() string {
+// generateValidationList return two validation list: podman and openshift.
+func generateValidationList() (string, string) {
+	podmanRules := validators.PodmanRegistry.Rules()
+	openshiftRules := validators.OpenshiftRegistry.Rules()
+
+	p := createRuleList(podmanRules)
+	o := createRuleList(openshiftRules)
+
+	return p, o
+}
+
+func createRuleList(rules []validators.Rule) string {
 	var b strings.Builder
-	rules := validators.PodmanRegistry.Rules()
-
 	maxLen := 0
-
 	for _, rule := range rules {
 		if len(rule.Name()) > maxLen {
 			maxLen = len(rule.Name())
