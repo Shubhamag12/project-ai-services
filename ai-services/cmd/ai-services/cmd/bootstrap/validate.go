@@ -121,12 +121,21 @@ func createRuleList(rules []validators.Rule) string {
 }
 
 func BuildSkipFlagDescription() string {
-	rules := validators.PodmanRegistry.Rules()
+	podmanRules := validators.PodmanRegistry.Rules()
+	openshiftRules := validators.OpenshiftRegistry.Rules()
 
-	ruleName := make([]string, 0, len(rules))
-	for _, rule := range rules {
-		ruleName = append(ruleName, rule.Name())
+	podmanRuleNames := make([]string, 0, len(podmanRules))
+	for _, rule := range podmanRules {
+		podmanRuleNames = append(podmanRuleNames, rule.Name())
 	}
 
-	return fmt.Sprintf("Skip specific validation checks (comma-separated: %s)", strings.Join(ruleName, ","))
+	openshiftRuleNames := make([]string, 0, len(openshiftRules))
+	for _, rule := range openshiftRules {
+		openshiftRuleNames = append(openshiftRuleNames, rule.Name())
+	}
+
+	return fmt.Sprintf("Skip specific validation checks\nFor podman: %s\nFor Openshift: %s",
+		strings.Join(podmanRuleNames, ","),
+		strings.Join(openshiftRuleNames, ","),
+	)
 }
