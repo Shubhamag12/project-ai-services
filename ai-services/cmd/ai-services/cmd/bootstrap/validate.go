@@ -68,10 +68,10 @@ func validateDescription() string {
 	return fmt.Sprintf(`Validates all prerequisites and configurations are correct for bootstrapping. 
 
 Following scenarios are validated and are available for skipping using --skip-validation flag:
-- For podman:
+- For Podman:
 %s
 
-- For openshift:
+- For OpenShift:
 %s`, podmanList, openshiftList)
 }
 
@@ -134,7 +134,7 @@ func BuildSkipFlagDescription() string {
 		openshiftRuleNames = append(openshiftRuleNames, rule.Name())
 	}
 
-	return fmt.Sprintf("Skip specific validation checks\nFor podman: %s\nFor Openshift: %s",
+	return fmt.Sprintf("Skip specific validation checks\nFor Podman: %s\nFor OpenShift: %s",
 		strings.Join(podmanRuleNames, ","),
 		strings.Join(openshiftRuleNames, ","),
 	)

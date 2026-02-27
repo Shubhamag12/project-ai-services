@@ -76,19 +76,19 @@ to run AI Services, ensuring prerequisites are met and initial configuration is 
 Available subcommands:
 
 Configure - Configure performs below actions
- - For podman:
+ - For Podman:
    - Installs podman on host if not installed
    - Runs servicereport tool to configure required spyre cards
    - Initializes the AI Services infrastructure
 
- - For openshift:
+ - For OpenShift:
    - Installs machine config, and dependant operators
    - Installs and configures SpyreClusterPolicy	
 
 Validate - Checks below system prerequisites:
-- For podman:
+- For Podman:
 %s
 
-- For openshift:
+- For Openshift:
 %s`, podmanList, openshiftList)
 }
