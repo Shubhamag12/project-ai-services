@@ -29,7 +29,7 @@ func NewSpyrePolicyRule() *SpyrePolicyRule {
 }
 
 func (r *SpyrePolicyRule) Name() string {
-	return "scp"
+	return "spyreclysterpolicy"
 }
 
 func (r *SpyrePolicyRule) Description() string {
