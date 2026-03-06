@@ -133,6 +133,8 @@ func validateOperator(c *openshift.OpenshiftClient, csvList *unstructured.Unstru
 				Namespace: csv.GetNamespace(),
 			}, current); err != nil {
 				if apierrors.IsNotFound(err) {
+					logger.Infof("Operator %s not found, waiting...", name)
+
 					return false, nil
 				}
 
