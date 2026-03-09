@@ -29,6 +29,7 @@ func (p *BootstrapFactory) Validate(skip map[string]bool) error {
 		ruleName := rule.Name()
 		if skip[ruleName] {
 			logger.Warningf("%s check skipped; Proceeding without validation may result in deployment failure.", ruleName)
+
 			continue
 		}
 
@@ -50,6 +51,7 @@ func (p *BootstrapFactory) Validate(skip map[string]bool) error {
 	}
 
 	logger.Infoln("All validations passed")
+
 	return nil
 }
 
@@ -93,10 +95,11 @@ func executeRule(ctx context.Context, rule validators.Rule) validationResult {
 		case constants.ValidationLevelWarning:
 			// Warning level
 			s.Stop("Warning: " + err.Error())
+
 			return validationResult{}
 		}
 	}
-
 	s.Stop(rule.Message())
+
 	return validationResult{}
 }
