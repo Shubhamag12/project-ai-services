@@ -1,26 +1,27 @@
+@use "@carbon/react/scss/spacing";
+
 .rowActions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap: spacing.$spacing-03;
+  padding: spacing.$spacing-03;
 }
 
 .noDataContent {
-  padding: 2rem;
+  padding: spacing.$spacing-07;
 }
 
 .tableContent {
-  padding: 1rem;
+  padding: spacing.$spacing-07;
 }
 
-@media (min-width: 42rem) {
-  .tableContent {
-    padding: 2rem;
-  }
+.tableColumn {
+  margin: 0;
 }
+
 .deleteConfirmation {
-  margin-top: 16px;
+  margin-top: spacing.$spacing-05;
   font-weight: bolder;
   border: none;
 }
@@ -40,6 +41,15 @@
 }
 .deleteButton {
   transition: background-color 0.2s ease;
+}
+
+.deleteButton:hover {
+  background-color: var(--cds-button-danger-primary) !important;
+  color: var(--cds-background) !important;
+}
+
+.deleteButton:hover svg {
+  fill: var(--cds-icon-on-color);
 }
 
 .selectedDelete {

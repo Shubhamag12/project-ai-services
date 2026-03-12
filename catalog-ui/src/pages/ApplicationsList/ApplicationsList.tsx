@@ -49,7 +49,7 @@ const headers: DataTableHeader[] = [
 const rows: ApplicationRow[] = [
   {
     id: "1",
-    name: "Content goes here and can wrap to multiple lines if needed or be truncated with an ellipsis if it exceeds the maximum length allowed",
+    name: "Incident troubleshooting",
     template: "Digital Assistant",
     processors: 1,
     memory: "3GB",
@@ -282,9 +282,9 @@ const ApplicationsListPage = () => {
         fullWidthGrid="xl"
       />
 
-      <Grid fullWidth>
-        <Column lg={16} md={8} sm={4}>
-          <div className={styles.tableContent}>
+      <div className={styles.tableContent}>
+        <Grid fullWidth>
+          <Column lg={16} md={8} sm={4} className={styles.tableColumn}>
             <DataTable rows={paginatedRows} headers={headers} size="lg">
               {({
                 rows,
@@ -338,34 +338,36 @@ const ApplicationsListPage = () => {
                         </Button>
                       </TableToolbarContent>
                     </TableToolbar>
-                    <Table {...getTableProps()}>
-                      <TableHead>
-                        <TableRow>
-                          {headers.map((header) => {
-                            const { key, ...rest } = getHeaderProps({ header });
 
-                            return (
-                              <TableHeader key={key} {...rest}>
-                                {header.header}
-                              </TableHeader>
-                            );
-                          })}
-                        </TableRow>
-                      </TableHead>
+                    {noApplications ? (
+                      <NoDataEmptyState
+                        title="Start by adding an application"
+                        subtitle="To deploy an application using a template, click Deploy."
+                        className={styles.noDataContent}
+                      />
+                    ) : noSearchResults ? (
+                      <NoDataEmptyState
+                        title="No data"
+                        subtitle="Try adjusting your search or filter."
+                        className={styles.noDataContent}
+                      />
+                    ) : (
+                      <Table {...getTableProps()}>
+                        <TableHead>
+                          <TableRow>
+                            {headers.map((header) => {
+                              const { key, ...rest } = getHeaderProps({
+                                header,
+                              });
 
-                      {noApplications ? (
-                        <NoDataEmptyState
-                          title="Start by adding an application"
-                          subtitle="To deploy an application using a template, click Deploy."
-                          className={styles.noDataContent}
-                        />
-                      ) : noSearchResults ? (
-                        <NoDataEmptyState
-                          title="No data"
-                          subtitle="Try adjusting your search or filter."
-                          className={styles.noDataContent}
-                        />
-                      ) : (
+                              return (
+                                <TableHeader key={key} {...rest}>
+                                  {header.header}
+                                </TableHeader>
+                              );
+                            })}
+                          </TableRow>
+                        </TableHead>
                         <TableBody>
                           {rows.map((row) => {
                             const { key: rowKey, ...rowProps } = getRowProps({
@@ -428,8 +430,8 @@ const ApplicationsListPage = () => {
                             );
                           })}
                         </TableBody>
-                      )}
-                    </Table>
+                      </Table>
+                    )}
                   </TableContainer>
 
                   {filteredRows.length > 20 && (
@@ -453,55 +455,57 @@ const ApplicationsListPage = () => {
                 </>
               )}
             </DataTable>
-          </div>
-          <Modal
-            open={state.isDeleteDialogOpen}
-            size="xs"
-            modalLabel="Delete Case routing"
-            modalHeading="Confirm delete"
-            primaryButtonText="Delete"
-            secondaryButtonText="Cancel"
-            danger
-            primaryButtonDisabled={!state.isConfirmed}
-            onRequestClose={() => {
-              dispatch({ type: ACTION_TYPES.CLOSE_DELETE_DIALOG });
-            }}
-            onRequestSubmit={handleDelete}
-          >
-            <p>
-              Deleting an application permanently removes all associated
-              components, including connected services, runtime metadata, and
-              any data or configurations created.
-            </p>
-            <div>
-              <CheckboxGroup
-                className={styles.deleteConfirmation}
-                legendText="Confirm application to be deleted"
-              >
-                <Checkbox
-                  id="checkbox-label-1"
-                  labelText={
-                    <strong>
-                      {state.selectedRowId
-                        ? state.rowsData.find(
-                            (r: ApplicationRow) => r.id === state.selectedRowId,
-                          )?.name
-                        : ""}
-                    </strong>
-                  }
-                  checked={state.isConfirmed}
-                  onChange={(_, { checked }) =>
-                    dispatch({
-                      type: ACTION_TYPES.SET_CONFIRMED,
-                      payload: checked,
-                    })
-                  }
-                />
-              </CheckboxGroup>
-            </div>
-          </Modal>
-        </Column>
-      </Grid>
+
+            <Modal
+              open={state.isDeleteDialogOpen}
+              size="sm"
+              modalLabel="Delete Case routing"
+              modalHeading="Confirm delete"
+              primaryButtonText="Delete"
+              secondaryButtonText="Cancel"
+              danger
+              primaryButtonDisabled={!state.isConfirmed}
+              onRequestClose={() => {
+                dispatch({ type: ACTION_TYPES.CLOSE_DELETE_DIALOG });
+              }}
+              onRequestSubmit={handleDelete}
+            >
+              <p>
+                Deleting an application permanently removes all associated
+                components, including connected services, runtime metadata, and
+                any data or configurations created.
+              </p>
+              <div>
+                <CheckboxGroup
+                  className={styles.deleteConfirmation}
+                  legendText="Confirm application to be deleted"
+                >
+                  <Checkbox
+                    id="checkbox-label-1"
+                    labelText={
+                      <strong>
+                        {state.selectedRowId
+                          ? state.rowsData.find(
+                              (r: ApplicationRow) =>
+                                r.id === state.selectedRowId,
+                            )?.name
+                          : ""}
+                      </strong>
+                    }
+                    checked={state.isConfirmed}
+                    onChange={(_, { checked }) =>
+                      dispatch({
+                        type: ACTION_TYPES.SET_CONFIRMED,
+                        payload: checked,
+                      })
+                    }
+                  />
+                </CheckboxGroup>
+              </div>
+            </Modal>
+          </Column>
+        </Grid>
+      </div>
     </>
   );
 };
