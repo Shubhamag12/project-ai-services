@@ -460,10 +460,10 @@ func processRHODSResource(client *openshift.OpenshiftClient, resource *unstructu
 	}
 
 	if exists {
-		logger.Infof("\nFound existing %s named '%s', will re-apply spec to it", kind, existingName, logger.VerbosityLevelDebug)
+		logger.Infof("\nFound existing %s named '%s'", kind, existingName, logger.VerbosityLevelDebug)
 		resource.SetName(existingName)
 	} else {
-		logger.Infof("\nNo existing %s found, will create new one", kind, logger.VerbosityLevelDebug)
+		logger.Infof("\nNo existing %s found, creating...", kind, logger.VerbosityLevelDebug)
 	}
 
 	return nil
