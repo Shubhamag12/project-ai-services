@@ -1,11 +1,9 @@
 package openshift
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
@@ -21,17 +19,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	apiyaml "k8s.io/apimachinery/pkg/util/yaml"
 	k8sClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type yamlType string
-
 const (
-	externalDeviceReservation          = "externalDeviceReservation"
-	experimentalMode                   = "experimentalMode"
-	operator                  yamlType = "operator"
-	operand                   yamlType = "operand"
+	externalDeviceReservation = "externalDeviceReservation"
+	experimentalMode          = "experimentalMode"
+	operatorFolder            = "02-operators"
+	operandFolder             = "03-operands"
+	machineConfigFolder       = "01-machine-config"
 )
 
 func (o *OpenshiftBootstrap) Configure() error {
@@ -45,7 +41,7 @@ func (o *OpenshiftBootstrap) Configure() error {
 	s := spinner.New("Applying the configurations")
 	s.Start(client.Ctx)
 
-	if err := applyYamlsFromFolder(client, "01-machine-config", ""); err != nil {
+	if err := applyYamlsFromFolder(client, machineConfigFolder); err != nil {
 		s.Fail("failed to apply the configurations")
 
 		return fmt.Errorf("error occurred while applying the configurations: %w", err)
@@ -56,7 +52,7 @@ func (o *OpenshiftBootstrap) Configure() error {
 	s = spinner.New("Applying operator configurations")
 	s.Start(client.Ctx)
 
-	if err := applyYamlsFromFolder(client, "02-operators", operator); err != nil {
+	if err := applyYamlsFromFolder(client, operatorFolder); err != nil {
 		s.Fail("failed to apply operator configurations")
 
 		return fmt.Errorf("error occurred while applying operator configurations: %w", err)
@@ -78,7 +74,7 @@ func (o *OpenshiftBootstrap) Configure() error {
 		return fmt.Errorf("error occurred while configuring spyre cluster policy: %w", err)
 	}
 
-	if err := applyYamlsFromFolder(client, "03-operands", operand); err != nil {
+	if err := applyYamlsFromFolder(client, operandFolder); err != nil {
 		s.Fail("failed to apply operand configurations")
 
 		return fmt.Errorf("error occurred while applying operand configurations: %w", err)
@@ -152,7 +148,7 @@ func waitForAllCRs(client *openshift.OpenshiftClient) error {
 	return nil
 }
 
-func applyYamlsFromFolder(client *openshift.OpenshiftClient, folder string, ytype yamlType) error {
+func applyYamlsFromFolder(client *openshift.OpenshiftClient, folder string) error {
 	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{
 		FS:      &assets.BootstrapFS,
 		Root:    "bootstrap/openshift/" + folder,
@@ -164,8 +160,8 @@ func applyYamlsFromFolder(client *openshift.OpenshiftClient, folder string, ytyp
 		return fmt.Errorf("error loading yamls from %s: %w", folder, err)
 	}
 
-	switch ytype {
-	case operand:
+	switch folder {
+	case operandFolder:
 		// For operands, check if DSC/DSCI already exist and update existing resources
 		yamls, err = handleExistingOperands(client, yamls)
 		if err != nil {
@@ -383,12 +379,12 @@ func waitForSpyreClusterPolicy(client *openshift.OpenshiftClient) error {
 	})
 }
 
-// handleExistingOperands checks if DSC/DSCI instances already exist and updates existing resources.
+// handleExistingOperands checks if DSC/DSCI instances already exist and updates the resource names.
 func handleExistingOperands(client *openshift.OpenshiftClient, yamls [][]byte) ([][]byte, error) {
 	updatedYamls := make([][]byte, 0, len(yamls))
 
 	for _, yaml := range yamls {
-		updatedYaml, err := updateYamlWithExistingResource(client, yaml)
+		updatedYaml, err := updateRHODSResourceNames(client, yaml)
 		if err != nil {
 			return nil, err
 		}
@@ -398,111 +394,44 @@ func handleExistingOperands(client *openshift.OpenshiftClient, yamls [][]byte) (
 	return updatedYamls, nil
 }
 
-// updateYamlWithExistingResource checks if DSC/DSCI resources exist and updates existing resources.
-// This function handles multi-resource YAML files (resources separated by ---).
-func updateYamlWithExistingResource(client *openshift.OpenshiftClient, yaml []byte) ([]byte, error) {
-	decoder := apiyaml.NewYAMLOrJSONDecoder(bytes.NewReader(yaml), yamlDecoderBufSz)
-	var updatedResources [][]byte
+// updateRHODSResourceNames checks if DSC/DSCI resources exist and updates their names in the YAML.
+func updateRHODSResourceNames(client *openshift.OpenshiftClient, yaml []byte) ([]byte, error) {
+	updatedYaml := string(yaml)
 
-	// Process all resources in the YAML file
-	for {
-		resource := &unstructured.Unstructured{}
-		err := decoder.Decode(resource)
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("error decoding yaml: %w", err)
-		}
-
-		// Skip empty resources
-		if resource.GetKind() == "" {
-			continue
-		}
-
-		// Process DSC/DSCI resources to check for existing instances
-		if err := processRHODSResource(client, resource); err != nil {
-			return nil, err
-		}
-
-		// Convert resource back to JSON (YAML decoder can handle JSON)
-		resourceJSON, err := resource.MarshalJSON()
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling resource: %w", err)
-		}
-
-		updatedResources = append(updatedResources, resourceJSON)
+	// Define resource types to check with their default names
+	resourceConfigs := map[string]string{
+		"DSCInitialization":  "default-dsci",
+		"DataScienceCluster": "default-dsc",
 	}
 
-	// If no resources were found, return original YAML
-	if len(updatedResources) == 0 {
-		return yaml, nil
-	}
-
-	return combineResources(updatedResources), nil
-}
-
-// processRHODSResource checks if a DSC/DSCI resource exists and updates its name if needed.
-func processRHODSResource(client *openshift.OpenshiftClient, resource *unstructured.Unstructured) error {
-	kind := resource.GetKind()
-
-	// Only handle DSCInitialization and DataScienceCluster
-	if kind != "DSCInitialization" && kind != "DataScienceCluster" {
-		return nil
-	}
-
-	// Check if an instance of this kind already exists
-	existingName, exists, err := getExistingResourceName(client, kind)
-	if err != nil {
-		return fmt.Errorf("error checking for existing %s: %w", kind, err)
-	}
-
-	if exists {
-		logger.Infof("\nFound existing %s named '%s'", kind, existingName, logger.VerbosityLevelDebug)
-		resource.SetName(existingName)
-	} else {
-		logger.Infof("\nNo existing %s found, creating...", kind, logger.VerbosityLevelDebug)
-	}
-
-	return nil
-}
-
-// combineResources combines multiple JSON resources with YAML separator.
-func combineResources(resources [][]byte) []byte {
-	var result bytes.Buffer
-	for i, res := range resources {
-		if i > 0 {
-			result.WriteString("\n---\n")
+	// Check each resource type
+	for kind, defaultName := range resourceConfigs {
+		// Check if YAML contains this resource kind
+		if strings.Contains(updatedYaml, "kind: "+kind) {
+			// Check if an instance already exists
+			existingName, exists, err := getExistingResourceName(client, kind)
+			if err != nil {
+				return nil, fmt.Errorf("error checking for existing %s: %w", kind, err)
+			}
+			if exists {
+				logger.Infof("\nFound existing %s named '%s'", kind, existingName, logger.VerbosityLevelDebug)
+				// Replace the default name with the existing name
+				updatedYaml = strings.ReplaceAll(updatedYaml, "name: "+defaultName, "name: "+existingName)
+			}
 		}
-		result.Write(res)
 	}
 
-	return result.Bytes()
+	return []byte(updatedYaml), nil
 }
 
 // getExistingResourceName checks if a DSC/DSCI resource exists and returns its name.
 func getExistingResourceName(client *openshift.OpenshiftClient, kind string) (string, bool, error) {
-	var group, version string
-
-	switch kind {
-	case "DSCInitialization":
-		group = "dscinitialization.opendatahub.io"
-		version = "v1"
-	case "DataScienceCluster":
-		group = "datasciencecluster.opendatahub.io"
-		version = "v1"
-	default:
-		return "", false, nil
-	}
-
-	// List all resources of this kind
+	// List all resources of this kind using unstructured list
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   group,
-		Version: version,
-		Kind:    kind + "List",
+		Group:   strings.ToLower(kind) + ".opendatahub.io",
+		Version: "v2",
+		Kind:    kind,
 	})
 
 	if err := client.Client.List(client.Ctx, list); err != nil {
