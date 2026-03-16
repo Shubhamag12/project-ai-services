@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	operatorsv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/project-ai-services/ai-services/assets"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
@@ -162,7 +164,7 @@ func applyYamlsFromFolder(client *openshift.OpenshiftClient, folder string) erro
 
 	switch folder {
 	case operandFolder:
-		// For operands, check if DSC/DSCI already exist and update existing resources
+		// For operands, check if single instance resource already exist and update existing ones
 		yamls, err = handleExistingOperands(client, yamls)
 		if err != nil {
 			return fmt.Errorf("error handling existing operands: %w", err)
@@ -379,51 +381,76 @@ func waitForSpyreClusterPolicy(client *openshift.OpenshiftClient) error {
 	})
 }
 
-// handleExistingOperands checks if DSC/DSCI instances already exist and updates the resource names.
+// handleExistingOperands checks if single instance resources already exist and update existing one's name.
 func handleExistingOperands(client *openshift.OpenshiftClient, yamls [][]byte) ([][]byte, error) {
+	resources := []string{
+		"DSCInitialization", "DataScienceCluster",
+	}
+
+	existingResources := make(map[string]string)
+	for _, kind := range resources {
+		if name, exists, err := getExistingResourceName(client, kind); err != nil {
+			return nil, fmt.Errorf("error checking for existing %s: %w", kind, err)
+		} else if exists {
+			existingResources[kind] = name
+			logger.Infof("\nFound existing %s named '%s'", kind, name, logger.VerbosityLevelDebug)
+		}
+	}
+
 	updatedYamls := make([][]byte, 0, len(yamls))
 
-	for _, yaml := range yamls {
-		updatedYaml, err := updateRHODSResourceNames(client, yaml)
+	for _, yamlBytes := range yamls {
+		updatedYaml, err := updateRHODSResourceNames(yamlBytes, existingResources, resources)
 		if err != nil {
 			return nil, err
 		}
-		updatedYamls = append(updatedYamls, updatedYaml)
+		// Skip nil YAMLs (resources that should not be applied)
+		if updatedYaml != nil {
+			updatedYamls = append(updatedYamls, updatedYaml)
+		}
 	}
 
 	return updatedYamls, nil
 }
 
-// updateRHODSResourceNames checks if DSC/DSCI resources exist and updates their names in the YAML.
-func updateRHODSResourceNames(client *openshift.OpenshiftClient, yaml []byte) ([]byte, error) {
-	updatedYaml := string(yaml)
-
-	// Define resource types to check with their default names
-	resourceConfigs := map[string]string{
-		"DSCInitialization":  "default-dsci",
-		"DataScienceCluster": "default-dsc",
+// updateRHODSResourceNames checks if single instance resources exist and updates their names in the YAML.
+func updateRHODSResourceNames(yamlBytes []byte, existingResources map[string]string, resources []string) ([]byte, error) {
+	obj := &unstructured.Unstructured{}
+	if err := yaml.Unmarshal(yamlBytes, obj); err != nil {
+		// return nil here as file can be multi-resource YAML
+		return yamlBytes, nil
 	}
 
-	for kind, defaultName := range resourceConfigs {
-		// Checking if YAML contains this resource kind
-		if strings.Contains(updatedYaml, "kind: "+kind) {
-			// Checking if an instance already exists
-			existingName, exists, err := getExistingResourceName(client, kind)
-			if err != nil {
-				return nil, fmt.Errorf("error checking for existing %s: %w", kind, err)
-			}
-			if exists {
-				logger.Infof("\nFound existing %s named '%s'", kind, existingName, logger.VerbosityLevelDebug)
-				// Replace the default name with the existing name
-				updatedYaml = strings.ReplaceAll(updatedYaml, "name: "+defaultName, "name: "+existingName)
-			}
+	kind := obj.GetKind()
+	if !slices.Contains(resources, kind) {
+		// resource is not single instance, we skip it
+		return yamlBytes, nil
+	}
+
+	existingName, exists := existingResources[kind]
+	if !exists {
+		// resource does not exist, we create it
+		return yamlBytes, nil
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations != nil {
+		if reApply, ok := annotations["ai-services.io/re-apply"]; ok && reApply == "false" {
+			// we skip resources which have re-apply annotation set to false
+			return nil, nil
 		}
 	}
 
-	return []byte(updatedYaml), nil
+	obj.SetName(existingName)
+	updatedYaml, err := yaml.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedYaml, nil
 }
 
-// getExistingResourceName checks if a DSC/DSCI resource exists and returns its name.
+// getExistingResourceName checks if a single instance resource exists and returns its name.
 func getExistingResourceName(client *openshift.OpenshiftClient, kind string) (string, bool, error) {
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{
