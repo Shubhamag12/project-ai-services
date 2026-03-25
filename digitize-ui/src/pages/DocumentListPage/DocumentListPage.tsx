@@ -22,6 +22,7 @@ import {
   Checkbox,
   CheckboxGroup,
   ActionableNotification,
+  ToastNotification,
   TextInput,
   InlineLoading,
   Tooltip,
@@ -35,6 +36,13 @@ import styles from './DocumentListPage.module.scss';
 interface DocumentContentData {
   result: any;
   output_format: string;
+}
+
+interface NotificationStatus {
+  show: boolean;
+  kind: 'success' | 'error' | 'info';
+  title: string;
+  subtitle?: string;
 }
 
 export type ExportStatus = 'idle' | 'exporting' | 'success' | 'error';
@@ -57,6 +65,7 @@ interface DocumentListState {
   errorMessage: string;
   errorDocName: string;
   isDeleting: boolean;
+  deleteStatus: NotificationStatus;
   isExportDialogOpen: boolean;
   csvFileName: string;
   exportStatus: ExportStatus;
@@ -79,11 +88,14 @@ type DocumentListAction =
   | { type: 'CLOSE_CONTENT_MODAL' }
   | { type: 'OPEN_DELETE_MODAL'; payload: string }
   | { type: 'CLOSE_DELETE_MODAL' }
+  | { type: 'CLOSE_DELETE_MODAL_KEEP_DOC' }
   | { type: 'SET_CONFIRMED'; payload: boolean }
   | { type: 'SHOW_ERROR'; payload: { message: string; docName?: string } }
   | { type: 'HIDE_ERROR' }
   | { type: 'SET_IS_DELETING'; payload: boolean }
   | { type: 'DELETE_DOCUMENT'; payload: string }
+  | { type: 'SET_DELETE_STATUS'; payload: NotificationStatus }
+  | { type: 'HIDE_DELETE_STATUS' }
   | { type: 'OPEN_EXPORT_DIALOG' }
   | { type: 'CLOSE_EXPORT_DIALOG' }
   | { type: 'SET_CSV_FILENAME'; payload: string }
@@ -109,6 +121,7 @@ const initialState: DocumentListState = {
   errorMessage: '',
   errorDocName: '',
   isDeleting: false,
+  deleteStatus: { show: false, kind: 'info', title: '' },
   isExportDialogOpen: false,
   csvFileName: '',
   exportStatus: 'idle',
@@ -205,6 +218,12 @@ const documentListReducer = (
         isConfirmed: false,
         docToDelete: null,
       };
+    case 'CLOSE_DELETE_MODAL_KEEP_DOC':
+      return {
+        ...state,
+        showDeleteModal: false,
+        isConfirmed: false,
+      };
     case 'SET_CONFIRMED':
       return { ...state, isConfirmed: action.payload };
     case 'DELETE_DOCUMENT':
@@ -231,6 +250,16 @@ const documentListReducer = (
       };
     case 'SET_IS_DELETING':
       return { ...state, isDeleting: action.payload };
+    case 'SET_DELETE_STATUS':
+      return {
+        ...state,
+        deleteStatus: action.payload,
+      };
+    case 'HIDE_DELETE_STATUS':
+      return {
+        ...state,
+        deleteStatus: { show: false, kind: 'info', title: '' },
+      };
     case 'OPEN_EXPORT_DIALOG':
       return {
         ...state,
@@ -453,22 +482,51 @@ const DocumentListPage = () => {
   const handleDeleteConfirm = async () => {
     if (!state.docToDelete) return;
 
+    const docName = state.documents.find((d) => d.id === state.docToDelete)?.name || '';
     dispatch({ type: 'SET_IS_DELETING', payload: true });
 
     try {
       await deleteDocument(state.docToDelete);
       dispatch({ type: 'DELETE_DOCUMENT', payload: state.docToDelete });
-      fetchDocuments();
-    } catch (error: any) {
-      const msg = error.response?.data?.detail || error.message || 'Failed deleting document';
-      const name = state.documents.find((d) => d.id === state.docToDelete)?.name || '';
+      
+      // Show success notification
       dispatch({
-        type: 'SHOW_ERROR',
-        payload: { message: msg, docName: name },
+        type: 'SET_DELETE_STATUS',
+        payload: {
+          show: true,
+          kind: 'success',
+          title: 'Document deleted successfully',
+          subtitle: `"${docName}" has been removed`,
+        },
       });
-    } finally {
+
+      // Hide success notification after 3 seconds
+      setTimeout(() => {
+        dispatch({ type: 'HIDE_DELETE_STATUS' });
+      }, 3000);
+
+      fetchDocuments();
+      
+      // Close modal and clear state on success
       dispatch({ type: 'SET_IS_DELETING', payload: false });
       dispatch({ type: 'CLOSE_DELETE_MODAL' });
+    } catch (error: any) {
+      const msg = error.response?.data?.detail || error.message || 'Failed deleting document';
+      
+      // Show error notification
+      dispatch({
+        type: 'SET_DELETE_STATUS',
+        payload: {
+          show: true,
+          kind: 'error',
+          title: 'Failed to delete document',
+          subtitle: `${docName}: ${msg}`,
+        },
+      });
+      
+      // Close modal but keep docToDelete for retry
+      dispatch({ type: 'SET_IS_DELETING', payload: false });
+      dispatch({ type: 'CLOSE_DELETE_MODAL_KEEP_DOC' });
     }
   };
 
@@ -550,7 +608,8 @@ const DocumentListPage = () => {
           <span className={styles.statusText}>{doc.status}</span>
           {hasError && (
             <Tooltip
-              align="top"
+              align="bottom"
+              autoAlign={true}
               label="Document processing failed. Please try re-uploading the document."
               className={styles.errorTooltip}
             >
@@ -603,28 +662,64 @@ const DocumentListPage = () => {
     <Theme theme={effectiveTheme}>
       <div className={styles.documentListPage}>
         {state.toastOpen && (
-          <ActionableNotification
-            actionButtonLabel="Try again"
-            aria-label="close notification"
-            kind="error"
-            closeOnEscape
-            title={state.errorDocName ? `Delete document ${state.errorDocName} failed` : 'Error loading documents'}
-            subtitle={state.errorMessage}
-            onActionButtonClick={() => {
-              dispatch({ type: 'HIDE_ERROR' });
-              fetchDocuments();
-            }}
-            onCloseButtonClick={() => {
-              dispatch({ type: 'HIDE_ERROR' });
-            }}
-            style={{
-              position: 'fixed',
-              top: '4rem',
-              right: '2rem',
-              zIndex: 9999,
-            }}
-          />
+          <div className={styles.notificationWrapper}>
+            <ActionableNotification
+              actionButtonLabel="Try again"
+              aria-label="close notification"
+              kind="error"
+              closeOnEscape
+              title={state.errorDocName ? `Delete document ${state.errorDocName} failed` : 'Error loading documents'}
+              subtitle={state.errorMessage}
+              onActionButtonClick={() => {
+                dispatch({ type: 'HIDE_ERROR' });
+                fetchDocuments();
+              }}
+              onCloseButtonClick={() => {
+                dispatch({ type: 'HIDE_ERROR' });
+              }}
+              lowContrast
+            />
+          </div>
         )}
+
+        {/* Delete Error Notification with Retry */}
+        {state.deleteStatus.show && state.deleteStatus.kind === 'error' && (
+          <div className={styles.notificationWrapper}>
+            <ActionableNotification
+              actionButtonLabel="Try again"
+              aria-label="close notification"
+              kind="error"
+              closeOnEscape
+              title={state.deleteStatus.title}
+              subtitle={state.deleteStatus.subtitle}
+              onActionButtonClick={() => {
+                dispatch({ type: 'HIDE_DELETE_STATUS' });
+                // Re-open the delete modal with the last document
+                if (state.docToDelete) {
+                  dispatch({ type: 'OPEN_DELETE_MODAL', payload: state.docToDelete });
+                }
+              }}
+              onCloseButtonClick={() => {
+                dispatch({ type: 'HIDE_DELETE_STATUS' });
+              }}
+              lowContrast
+            />
+          </div>
+        )}
+
+        {/* Delete Success Notification */}
+        {state.deleteStatus.show && state.deleteStatus.kind === 'success' && (
+          <div className={styles.notificationWrapper}>
+            <ToastNotification
+              kind="success"
+              title={state.deleteStatus.title}
+              subtitle={state.deleteStatus.subtitle}
+              onClose={() => dispatch({ type: 'HIDE_DELETE_STATUS' })}
+              timeout={3000}
+            />
+          </div>
+        )}
+
         {/* Page Header */}
         <div className={styles.pageHeader}>
           <div className={styles.headerContent}>
