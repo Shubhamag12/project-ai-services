@@ -1,4 +1,4 @@
-- Upload and perform ingestion on the documents that you want to serve via this RAG application using the web interface at https://{{ .DIGITIZE_UI_ROUTE }}.
+- Use the ingestion UI to upload your documents and start the ingestion process for the RAG application at https://{{ .DIGITIZE_UI_ROUTE }}.
 
 - Chatbot UI is available to use at https://{{ .UI_ROUTE }}.
 

@@ -1,4 +1,4 @@
-- Upload and perform ingestion on the documents that you want to serve via this RAG application using the web interface at http://{{ .HOST_IP }}:{{ .DIGITIZE_UI_PORT }}.
+- Use the ingestion UI to upload your documents and start the ingestion process for the RAG application at http://{{ .HOST_IP }}:{{ .DIGITIZE_UI_PORT }}.
         
                     or
 
