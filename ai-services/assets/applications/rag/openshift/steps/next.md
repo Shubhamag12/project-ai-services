@@ -1,5 +1,5 @@
-- Add documents to your RAG application using the Digitize UI: https://{{ .DIGITIZE_UI_ROUTE }}.
+- Add documents to your RAG application using the Digitize Documents UI at https://{{ .DIGITIZE_UI_ROUTE }}.
 
-- Chatbot UI is available to use at https://{{ .UI_ROUTE }}.
+- These documents are consumed by Q&A service.
 
-- Chatbot Backend is available to use at https://{{ .BACKEND_ROUTE }}.
+- Run "ai-services application info {{ .AppName }} --runtime openshift" to view service endpoints.
