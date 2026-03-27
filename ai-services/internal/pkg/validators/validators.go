@@ -10,6 +10,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/rhods"
 	spyrepolicy "github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/spyreclusterpolicy"
 	storageclass "github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/storageclass"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/directory"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/numa"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/platform"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/power"
@@ -30,6 +31,7 @@ func init() {
 	PodmanRegistry.Register(rhn.NewRHNRule())
 	PodmanRegistry.Register(spyre.NewSpyreRule())
 	PodmanRegistry.Register(servicereport.NewServiceReportRule())
+	PodmanRegistry.Register(directory.NewDirectoryRule())
 
 	// OpenshiftChecks
 	OpenshiftRegistry.Register(kubeconfig.NewKubeconfigRule())

@@ -357,3 +357,11 @@ func FlattenMapToKeys(m map[string]any, prefix string) map[string]string {
 
 	return result
 }
+
+func RequiredDirs() []string {
+	return []string{
+		"/var/lib/ai-services",
+		"/var/lib/ai-services/models",
+		"/var/lib/ai-services/applications",
+	}
+}

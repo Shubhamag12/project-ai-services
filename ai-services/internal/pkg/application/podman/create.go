@@ -14,6 +14,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/project-ai-services/ai-services/internal/pkg/application/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
@@ -37,19 +38,19 @@ var (
 
 // Create deploys a new application based on a template.
 func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions) error {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB86C"))
+	msg := style.Render("Changing SMT level requires sudo privileges and hence you will be prompted for your password") + "\n" +
+		style.Render("Alternatively, you can set SMT level manually beforehand using: sudo ppc64_cpu --smt=<smtLevel>\n")
+
+	logger.Infoln(msg)
+
 	// Proceed to create application
 	logger.Infof("Creating application '%s' using template '%s'\n", opts.Name, opts.TemplateName)
 
-	// set SMT level to target value
-	s := spinner.New("Checking SMT level")
-	s.Start(ctx)
 	err := p.setSMTLevel(opts.TemplateName)
 	if err != nil {
-		s.Fail("failed to set SMT level")
-
 		return fmt.Errorf("failed to set SMT level: %w", err)
 	}
-	s.Stop("SMT level configured successfully")
 
 	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
 
@@ -210,7 +211,20 @@ func (p *PodmanApplication) downloadModels(ctx context.Context, templateName, ap
 }
 
 func (p *PodmanApplication) setSMTLevel(templateName string) error {
-	// 1. Fetch Current SMT level
+	// 1. Fetch the target SMT level
+	targetSMTLevel, err := p.getTargetSMTLevel(templateName)
+	if err != nil {
+		return fmt.Errorf("failed to get target SMT level: %w", err)
+	}
+
+	if targetSMTLevel == nil {
+		// No SMT level specified in metadata.yaml
+		logger.Infoln("No SMT level specified in metadata.yaml. Keeping it to current level")
+
+		return nil
+	}
+
+	// 2. Fetch Current SMT level
 	cmd := exec.Command("ppc64_cpu", "--smt")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -220,19 +234,6 @@ func (p *PodmanApplication) setSMTLevel(templateName string) error {
 	currentSMTlevel, err := p.getSMTLevel(string(out))
 	if err != nil {
 		return fmt.Errorf("failed to get current SMT level: %w", err)
-	}
-
-	// 2. Fetch the target SMT level
-	targetSMTLevel, err := p.getTargetSMTLevel(templateName)
-	if err != nil {
-		return fmt.Errorf("failed to get target SMT level: %w", err)
-	}
-
-	if targetSMTLevel == nil {
-		// No SMT level specified in metadata.yaml
-		logger.Infof("No SMT level specified in metadata.yaml. Keeping it to current level: %d\n", currentSMTlevel)
-
-		return nil
 	}
 
 	// 3. Check if SMT level is already set to target value
@@ -245,7 +246,7 @@ func (p *PodmanApplication) setSMTLevel(templateName string) error {
 
 	// 4. Set SMT level to target value
 	arg := "--smt=" + strconv.Itoa(*targetSMTLevel)
-	cmd = exec.Command("ppc64_cpu", arg)
+	cmd = exec.Command("sudo", "ppc64_cpu", arg)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to set SMT level: %v, output: %s", err, string(out))

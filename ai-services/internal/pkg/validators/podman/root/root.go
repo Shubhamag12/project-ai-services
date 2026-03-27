@@ -25,17 +25,24 @@ func (r *RootRule) Description() string {
 func (r *RootRule) Verify() error {
 	euid := os.Geteuid()
 
-	logger.Infoln("Checking root privileges", logger.VerbosityLevelDebug)
+	if euid == 0 {
+		logger.Infoln("running command as root", logger.VerbosityLevelDebug)
 
-	if euid != 0 {
-		return fmt.Errorf("current user is not root (EUID: %d)", euid)
+		return nil
+	}
+	if euid != 0 && os.Getenv("XDG_RUNTIME_DIR") == "" {
+		uid := os.Getuid()
+		logger.Infoln("running command as %s", uid, logger.VerbosityLevelDebug)
+		if err := os.Setenv("XDG_RUNTIME_DIR", fmt.Sprintf("/run/user/%d", uid)); err != nil {
+			return fmt.Errorf("failed to set XDG_RUNTIME_DIR: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func (r *RootRule) Message() string {
-	return "Current user is root"
+	return "Current user has root privileges"
 }
 
 func (r *RootRule) Level() constants.ValidationLevel {
@@ -43,5 +50,5 @@ func (r *RootRule) Level() constants.ValidationLevel {
 }
 
 func (r *RootRule) Hint() string {
-	return "Run this command with root privileges using 'sudo' or as the root user"
+	return "Run the command with sudo or as root user, or ensure the user has appropriate permissions"
 }

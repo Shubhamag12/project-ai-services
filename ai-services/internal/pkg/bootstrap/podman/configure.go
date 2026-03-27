@@ -7,20 +7,16 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/root"
 )
 
 const (
 	podmanSocketWaitDuration = 2 * time.Second
 	contextTimeout           = 30 * time.Second
+	dirPerm                  = 0o755
 )
 
 // Configure performs the complete configuration of the Podman environment.
 func (p *PodmanBootstrap) Configure() error {
-	rootCheck := root.NewRootRule()
-	if err := rootCheck.Verify(); err != nil {
-		return err
-	}
 	ctx := context.Background()
 
 	s := spinner.New("Checking podman installation")
@@ -64,6 +60,16 @@ func (p *PodmanBootstrap) Configure() error {
 		return err
 	}
 	s.Stop("Spyre cards configuration validated successfully.")
+
+	s = spinner.New("Setting up directories")
+	s.Start(ctx)
+	// 3. Setup directories
+	if err := setupRequiredDirs(); err != nil {
+		s.Fail("failed to setup directories")
+
+		return err
+	}
+	s.Stop("Directories configured successfully")
 
 	logger.Infoln("LPAR configured successfully")
 
