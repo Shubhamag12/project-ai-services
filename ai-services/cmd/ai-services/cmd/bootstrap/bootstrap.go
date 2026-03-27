@@ -26,6 +26,7 @@ func BootstrapCmd() *cobra.Command {
 		Long:    bootstrapDescription(),
 		Example: bootstrapExample(),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			// Initialize runtime factory based on flag
 			rt := types.RuntimeType(runtimeType)
 			if !rt.Valid() {

@@ -25,6 +25,7 @@ var ApplicationCmd = &cobra.Command{
 	Short: "Deploy and monitor the applications",
 	Long:  `The application command helps you deploy and monitor the applications`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		// Initialize runtime factory based on flag
 		rt := types.RuntimeType(runtimeType)
 		if !rt.Valid() {
