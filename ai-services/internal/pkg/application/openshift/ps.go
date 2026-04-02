@@ -6,10 +6,15 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/application/common"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/kubeconfig"
 )
 
 // List returns information about running applications.
 func (o *OpenshiftApplication) List(opts appTypes.ListOptions) ([]appTypes.ApplicationInfo, error) {
+	kcCheck := kubeconfig.NewKubeconfigRule()
+	if err := kcCheck.Verify(); err != nil {
+		return nil, err
+	}
 	if opts.ApplicationName == "" {
 		return nil, fmt.Errorf("application name is required for openshift runtime")
 	}
