@@ -5,15 +5,10 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/kubeconfig"
 )
 
 // Logs displays logs from an application pod.
 func (o *OpenshiftApplication) Logs(opts types.LogsOptions) error {
-	kcCheck := kubeconfig.NewKubeconfigRule()
-	if err := kcCheck.Verify(); err != nil {
-		return err
-	}
 	logger.Warningln("Press Ctrl+C to exit the logs and return to the terminal.")
 	logger.Infof("Fetching logs for application pod: %s", opts.PodName)
 

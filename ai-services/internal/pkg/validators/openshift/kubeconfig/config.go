@@ -48,7 +48,7 @@ func (r *KubeconfigRule) Verify() error {
 		SelfSubjectAccessReviews().
 		Create(ctx, sar, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to connect to the cluster: %w", err)
+		return fmt.Errorf("failed to check namespace creation permissions: %w", err)
 	}
 
 	if !result.Status.Allowed {

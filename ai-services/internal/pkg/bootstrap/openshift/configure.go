@@ -14,7 +14,6 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/kubeconfig"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,11 +31,6 @@ const (
 
 func (o *OpenshiftBootstrap) Configure() error {
 	logger.Infoln("Configuring OpenShift cluster")
-	// exit early if cluster authentication fails
-	kcCheck := kubeconfig.NewKubeconfigRule()
-	if err := kcCheck.Verify(); err != nil {
-		return err
-	}
 
 	client, err := openshift.NewOpenshiftClient()
 	if err != nil {

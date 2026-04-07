@@ -10,15 +10,10 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/kubeconfig"
 )
 
 // Delete removes an application and its associated resources.
 func (o *OpenshiftApplication) Delete(ctx context.Context, opts types.DeleteOptions) error {
-	kcCheck := kubeconfig.NewKubeconfigRule()
-	if err := kcCheck.Verify(); err != nil {
-		return err
-	}
 	app := opts.Name
 	namespace := app
 

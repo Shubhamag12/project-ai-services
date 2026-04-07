@@ -6,17 +6,11 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/application/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators/openshift/kubeconfig"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
 
 // Info displays detailed information about an application.
 func (o *OpenshiftApplication) Info(opts types.InfoOptions) error {
-	kcCheck := kubeconfig.NewKubeconfigRule()
-	if err := kcCheck.Verify(); err != nil {
-		return err
-	}
-
 	// Step1: Do List pods and filter for given application name
 	listFilters := map[string][]string{}
 	if opts.Name != "" {
