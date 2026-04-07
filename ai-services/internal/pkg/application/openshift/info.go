@@ -12,6 +12,7 @@ import (
 // Info displays detailed information about an application.
 func (o *OpenshiftApplication) Info(opts types.InfoOptions) error {
 	// Step1: Do List pods and filter for given application name
+
 	listFilters := map[string][]string{}
 	if opts.Name != "" {
 		listFilters["label"] = []string{fmt.Sprintf("ai-services.io/application=%s", opts.Name)}

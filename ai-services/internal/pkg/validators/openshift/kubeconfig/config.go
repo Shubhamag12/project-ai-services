@@ -57,7 +57,7 @@ func (r *KubeconfigRule) Verify() error {
 			reason = result.Status.Reason
 		}
 
-		return fmt.Errorf("unable to connect to the cluster: %s", reason)
+		return fmt.Errorf("user does not have permission to create namespaces: %s", reason)
 	}
 
 	return nil

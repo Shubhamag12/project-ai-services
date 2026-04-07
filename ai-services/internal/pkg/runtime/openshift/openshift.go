@@ -127,7 +127,6 @@ func initializeClients() error {
 
 // checkClusterAccessibility verifies that the cluster is accessible by making a simple API call.
 func checkClusterAccessibility() error {
-	// Try to get server version as a simple connectivity check
 	_, err := kubeClient.Discovery().ServerVersion()
 	if err != nil {
 		return err
