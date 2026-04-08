@@ -21,6 +21,10 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
 
+const (
+	logChannelBufferSize = 50
+)
+
 type PodmanClient struct {
 	Context context.Context
 }
@@ -206,87 +210,93 @@ func (pc *PodmanClient) PodLogs(podNameOrID string) error {
 	// Start log streaming for each container
 	for _, container := range podInspect.Containers {
 		wg.Add(1)
-		go func(containerID string) {
-			defer wg.Done()
-
-			// container prefix to show in logs
-			prefix := containerID[:12]
-
-			containerStdout := make(chan string, 50)
-			containerStderr := make(chan string, 50)
-
-			// Start a goroutine to handle log output with prefix
-			var outputWg sync.WaitGroup
-			outputWg.Go(func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case line, ok := <-containerStdout:
-						if !ok {
-							// Check if stderr is also closed
-							select {
-							case _, ok := <-containerStderr:
-								if !ok {
-									return
-								}
-							default:
-							}
-							continue
-						}
-						mu.Lock()
-						logger.Infof("[%s] %s", prefix, line)
-						mu.Unlock()
-					case line, ok := <-containerStderr:
-						if !ok {
-							// Check if stdout is also closed
-							select {
-							case _, ok := <-containerStdout:
-								if !ok {
-									return
-								}
-							default:
-							}
-							continue
-						}
-						mu.Lock()
-						logger.Errorf("[%s] %s", prefix, line)
-						mu.Unlock()
-					}
-				}
-			})
-
-			// Stream logs from container
-			err := containers.Logs(ctx, containerID, opts, containerStdout, containerStderr)
-
-			// Close channels to signal output goroutine
-			close(containerStdout)
-			close(containerStderr)
-
-			// Wait for output goroutine to finish
-			outputWg.Wait()
-
-			// Only report errors if context wasn't cancelled
-			if err != nil && ctx.Err() == nil {
-				errChan <- fmt.Errorf("error streaming logs for container %s: %w", prefix, err)
-			}
-		}(container.ID)
+		go pc.streamContainerLogs(ctx, container.ID, opts, &wg, &mu, errChan)
 	}
 
 	// Wait for all container log streams to complete
 	wg.Wait()
 	close(errChan)
 
-	// Collect and report any errors (only if context wasn't cancelled by user)
-	if ctx.Err() != context.Canceled && ctx.Err() != context.DeadlineExceeded {
-		for err := range errChan {
-			if err != nil {
-				logger.Errorln(err.Error())
-			}
-		}
-	}
+	pc.collectErrors(ctx, errChan)
 
 	return nil
+}
+
+// streamContainerLogs streams logs from a single container
+func (pc *PodmanClient) streamContainerLogs(ctx context.Context, containerID string, opts *containers.LogOptions, wg *sync.WaitGroup, mu *sync.Mutex, errChan chan<- error) {
+	defer wg.Done()
+
+	prefix := containerID[:12]
+	containerStdout := make(chan string, logChannelBufferSize)
+	containerStderr := make(chan string, logChannelBufferSize)
+
+	// Start a goroutine to handle log output
+	var outputWg sync.WaitGroup
+	outputWg.Add(1)
+	go pc.handleLogOutput(ctx, prefix, containerStdout, containerStderr, mu, &outputWg)
+
+	// Stream logs from container
+	err := containers.Logs(ctx, containerID, opts, containerStdout, containerStderr)
+
+	close(containerStdout)
+	close(containerStderr)
+
+	// Wait for output goroutine to finish
+	outputWg.Wait()
+
+	if err != nil && ctx.Err() == nil {
+		errChan <- fmt.Errorf("error streaming logs for container %s: %w", prefix, err)
+	}
+}
+
+// handleLogOutput processes stdout and stderr channels and logs them with a prefix.
+func (pc *PodmanClient) handleLogOutput(ctx context.Context, prefix string, stdout, stderr <-chan string, mu *sync.Mutex, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	stdoutClosed := false
+	stderrClosed := false
+
+	for {
+		if stdoutClosed && stderrClosed {
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case line, ok := <-stdout:
+			if !ok {
+				stdoutClosed = true
+
+				continue
+			}
+			mu.Lock()
+			logger.Infof("[%s] %s", prefix, line)
+			mu.Unlock()
+		case line, ok := <-stderr:
+			if !ok {
+				stderrClosed = true
+
+				continue
+			}
+			mu.Lock()
+			logger.Errorf("[%s] %s", prefix, line)
+			mu.Unlock()
+		}
+	}
+}
+
+// collectErrors collects and logs errors from the error channel if context is not cancelled.
+func (pc *PodmanClient) collectErrors(ctx context.Context, errChan <-chan error) {
+	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+		return
+	}
+
+	for err := range errChan {
+		if err != nil {
+			logger.Errorln(err.Error())
+		}
+	}
 }
 
 func (pc *PodmanClient) PodExists(nameOrID string) (bool, error) {
