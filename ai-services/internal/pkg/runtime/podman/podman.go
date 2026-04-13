@@ -221,7 +221,7 @@ func (pc *PodmanClient) PodLogs(podNameOrID string) error {
 		return errors.New("no containers found in pod")
 	}
 
-	// Creating context here that listens for Ctrl+C
+	// creating context here that listens for Ctrl+C
 	ctx, stop := signal.NotifyContext(pc.Context, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
