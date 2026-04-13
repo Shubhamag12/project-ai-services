@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/project-ai-services/ai-services/tests/e2e/bootstrap"
 	"github.com/project-ai-services/ai-services/tests/e2e/cleanup"
 	"github.com/project-ai-services/ai-services/tests/e2e/cli"
+	"github.com/project-ai-services/ai-services/tests/e2e/common"
 	"github.com/project-ai-services/ai-services/tests/e2e/config"
 	"github.com/project-ai-services/ai-services/tests/e2e/ingestion"
 	"github.com/project-ai-services/ai-services/tests/e2e/podman"
@@ -50,7 +50,6 @@ var (
 	summarizePort               string
 	judgePort                   string
 	goldenDatasetFile           string
-	mainPodsByTemplate          map[string][]string
 	defaultRagAccuracyThreshold = 0.70
 	defaultMaxRetries           = 2
 )
@@ -107,15 +106,6 @@ var _ = ginkgo.BeforeSuite(func() {
 	} else {
 		appName = fmt.Sprintf("%s-app-%s", templateName, runID)
 		logger.Infof("[SETUP] Generated application name: %s", appName)
-	}
-
-	ginkgo.By("Setting main pods by template")
-	mainPodsByTemplate = map[string][]string{
-		"rag": {
-			"vllm-server",
-			//"milvus",  --commented as currently switch to opensearch is in-progress
-			"chat-bot",
-		},
 	}
 
 	ginkgo.By("Resolving application ports from environment")
@@ -228,14 +218,14 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 		ginkgo.It("runs application template command", ginkgo.Label("spyre-independent"), func() {
 			output, err := cli.TemplatesCommand(ctx, cfg, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(cli.ValidateApplicationsTemplateCommandOutput(output)).To(gomega.Succeed())
+			gomega.Expect(cli.ValidateApplicationsTemplateCommandOutput(output, appRuntime)).To(gomega.Succeed())
 		})
 		ginkgo.It("verifies application model list command", ginkgo.Label("spyre-independent"), func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
 			output, err := cli.ModelList(ctx, cfg, templateName, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(cli.ValidateModelListOutput(output, templateName)).To(gomega.Succeed())
+			gomega.Expect(cli.ValidateModelListOutput(output, templateName, appRuntime)).To(gomega.Succeed())
 			logger.Infoln("[TEST] Application model list validated successfully!")
 		})
 		ginkgo.It("verifies application model download command", ginkgo.Label("spyre-independent"), func() {
@@ -243,25 +233,25 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			defer cancel()
 			output, err := cli.ModelDownload(ctx, cfg, templateName, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(cli.ValidateModelDownloadOutput(output, templateName)).To(gomega.Succeed())
+			gomega.Expect(cli.ValidateModelDownloadOutput(output, templateName, appRuntime)).To(gomega.Succeed())
 			logger.Infoln("[TEST] Application model download validated successfully!")
 		})
 	})
 	ginkgo.Context("Bootstrap Steps", func() {
 		ginkgo.It("runs bootstrap configure", ginkgo.Label("spyre-dependent"), func() {
-			output, err := cli.BootstrapConfigure(ctx, appRuntime)
+			output, err := cli.BootstrapConfigure(ctx, cfg, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(cli.ValidateBootstrapConfigureOutput(output)).To(gomega.Succeed())
+			gomega.Expect(cli.ValidateBootstrapConfigureOutput(output, appRuntime)).To(gomega.Succeed())
 		})
 		ginkgo.It("runs bootstrap validate", ginkgo.Label("spyre-dependent"), func() {
-			output, err := cli.BootstrapValidate(ctx, appRuntime)
+			output, err := cli.BootstrapValidate(ctx, cfg, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(cli.ValidateBootstrapValidateOutput(output)).To(gomega.Succeed())
 		})
 		ginkgo.It("runs full bootstrap", ginkgo.Label("spyre-dependent"), func() {
-			output, err := cli.Bootstrap(ctx, appRuntime)
+			output, err := cli.Bootstrap(ctx, cfg, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(cli.ValidateBootstrapFullOutput(output)).To(gomega.Succeed())
+			gomega.Expect(cli.ValidateBootstrapFullOutput(output, appRuntime)).To(gomega.Succeed())
 		})
 	})
 	ginkgo.Context("Application Image Command Tests", func() {
@@ -290,29 +280,36 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			defer cancel()
 
 			pods := []string{"backend", "ui", "db"} // replace with actual pod names
-
+			params := ""
+			cliOptions := cli.CreateOptions{}
+			if appRuntime == "podman" {
+				params = "ui.port=" + uiPort + ",backend.port=" + backendPort + ",digitize.port=" + digitizePort + ",digitizeUi.port=" + digitizeUiPort + ",summarize.port=" + summarizePort
+				cliOptions = cli.CreateOptions{
+					SkipModelDownload: false,
+					ImagePullPolicy:   "IfNotPresent",
+				}
+			}
 			createOutput, err := cli.CreateRAGAppAndValidate(
 				ctx,
 				cfg,
 				appName,
 				templateName,
-				"ui.port="+uiPort+",backend.port="+backendPort+",digitize.port="+digitizePort+",digitizeUi.port="+digitizeUiPort+",summarize.port="+summarizePort,
+				params,
 				backendPort,
 				uiPort,
-				cli.CreateOptions{
-					SkipModelDownload: false,
-					ImagePullPolicy:   "IfNotPresent",
-				},
+				cliOptions,
 				pods,
 				appRuntime,
 			)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-			ragBaseURL, err = cli.GetBaseURL(createOutput, backendPort)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			if appRuntime == "podman" {
+				ragBaseURL, err = cli.GetBaseURL(createOutput, backendPort)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-			judgeBaseURL, err = cli.GetBaseURL(createOutput, judgePort)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				judgeBaseURL, err = cli.GetBaseURL(createOutput, judgePort)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			}
 			logger.Infof("[TEST] Application %s created, healthy, and RAG endpoints validated", appName)
 		})
 	})
@@ -348,18 +345,29 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			if !podmanReady {
 				ginkgo.Skip("Podman not available - will be installed via bootstrap configure")
 			}
-			err := podman.VerifyContainers(appName, appRuntime)
+			psWideArgs := []string{"-o", "wide"}
+			widePsOutput, err := cli.ApplicationPS(ctx, cfg, appName, appRuntime, psWideArgs...)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			err = podman.VerifyContainers(ctx, cfg, widePsOutput, appName, appRuntime)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "verify containers failed")
 			logger.Infof("[TEST] Containers verified")
 		})
-		ginkgo.It("Verifies Exposed Ports of the application", ginkgo.Label("spyre-dependent"), func() {
+		ginkgo.It("Verifies Exposed Ports/Routes of the application", ginkgo.Label("spyre-dependent"), func() {
 			if !podmanReady {
 				ginkgo.Skip("Podman not available - will be installed via bootstrap configure")
 			}
-			expectedPorts := []string{uiPort, backendPort, digitizePort, digitizeUiPort, summarizePort}
-			err := podman.VerifyExposedPorts(appName, expectedPorts, appRuntime)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Verify exposed ports failed")
-			logger.Infof("[TEST] Exposed ports verified")
+			if appRuntime == "podman" {
+				psWideArgs := []string{"-o", "wide"}
+				widePsOutput, err := cli.ApplicationPS(ctx, cfg, appName, appRuntime, psWideArgs...)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				expectedPorts := []string{uiPort, backendPort, digitizePort, digitizeUiPort, summarizePort}
+				gomega.Expect(podman.VerifyExposedPorts(appName, expectedPorts, appRuntime, widePsOutput)).NotTo(gomega.HaveOccurred(), "Verify exposed ports/routes failed")
+			} else {
+				output, err := podman.GetOpenshiftRoutes(appName)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				gomega.Expect(cli.ValidateOpenShiftRoutes(output)).NotTo(gomega.HaveOccurred(), "Verify exposed ports/routes failed")
+			}
+			logger.Infof("[TEST] Exposed ports/routes verified")
 		})
 		ginkgo.It("verifies application logs output", ginkgo.Label("spyre-dependent"), func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -369,67 +377,8 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			widePsOutput, err := cli.ApplicationPS(ctx, cfg, appName, appRuntime, psWideArgs...)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 
-			wideLines := strings.Split(widePsOutput, "\n")
-
-			type PodInfo struct {
-				PodID      string
-				Containers []string
-			}
-
-			pods := make(map[string]*PodInfo)
-			inTargetApp := false
-
-			for _, line := range wideLines {
-				line = strings.TrimSpace(line)
-				if line == "" ||
-					strings.HasPrefix(line, "APPLICATION") ||
-					strings.HasPrefix(line, "──") {
-					continue
-				}
-
-				fields := strings.Fields(line)
-
-				var podID, podName string
-				var containerStartIdx int
-
-				// First row of the application
-				if len(fields) >= 3 && fields[0] == appName {
-					inTargetApp = true
-					podID = fields[1]
-					podName = fields[2]
-					containerStartIdx = 3
-
-					// Subsequent rows of the same application
-				} else if inTargetApp && len(fields) >= 2 && strings.HasPrefix(fields[1], appName+"--") {
-					podID = fields[0]
-					podName = fields[1]
-					containerStartIdx = 2
-
-				} else if inTargetApp {
-					break
-				} else {
-					continue
-				}
-
-				pod := &PodInfo{
-					PodID: podID,
-				}
-
-				for _, tok := range fields[containerStartIdx:] {
-					tok = strings.TrimSuffix(tok, ",")
-
-					if strings.HasSuffix(tok, "-infra") {
-						continue
-					}
-
-					if strings.HasPrefix(tok, podName+"-") {
-						pod.Containers = append(pod.Containers, tok)
-					}
-				}
-
-				pods[podName] = pod
-			}
-
+			pods, err := podman.ExtractPodInfo(widePsOutput)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(pods).NotTo(gomega.BeEmpty(), "No pods found for application %s", appName)
 
 			for podName, pod := range pods {
@@ -446,7 +395,7 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 				}
 
 				// ---- Pod logs by ID
-				{
+				if appRuntime == "podman" {
 					logCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					logs, err := cli.ApplicationLogs(logCtx, cfg, appName, pod.PodID, "", appRuntime)
 					cancel()
@@ -473,7 +422,7 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			suffixes, ok := mainPodsByTemplate[templateName]
+			suffixes, ok := common.ExpectedPodSuffixes[appRuntime]
 			gomega.Expect(ok).To(gomega.BeTrue(), "unknown templateName")
 
 			pods := make([]string, 0, len(suffixes))
@@ -518,14 +467,14 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 			defer cancel()
 
-			completionStr := "Completed '/var/docs/test_doc.pdf'"
+			completionStr := "| /var/docs/test_doc.pdf |"
 			gomega.Expect(appName).NotTo(gomega.BeEmpty())
 
 			gomega.Expect(ingestion.PrepareDocs(appName, "test_doc.pdf")).To(gomega.Succeed())
 
-			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false)).To(gomega.Succeed())
+			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false, appRuntime)).To(gomega.Succeed())
 
-			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false)
+			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false, appRuntime)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(logs).To(gomega.ContainSubstring("Ingestion started"))
 			gomega.Expect(logs).To(gomega.ContainSubstring(completionStr))
@@ -536,14 +485,14 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 			defer cancel()
 
-			completionStr := "Completed '/var/docs/blank.pdf'"
+			completionStr := "| /var/docs/blank.pdf |"
 			gomega.Expect(appName).NotTo(gomega.BeEmpty())
 
 			gomega.Expect(ingestion.PrepareDocs(appName, "blank.pdf")).To(gomega.Succeed())
 
-			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false)).To(gomega.Succeed())
+			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false, appRuntime)).To(gomega.Succeed())
 
-			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false)
+			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false, appRuntime)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(logs).To(gomega.ContainSubstring("Ingestion started"))
 			gomega.Expect(logs).To(gomega.ContainSubstring(completionStr))
@@ -554,14 +503,14 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 			defer cancel()
 
-			completionStr := "Skipping file with .pdf extension but unsupported format: /var/docs/sample_png.pdf"
+			completionStr := "File validation failed: File has .pdf extension but unsupported format: sample_png.pdf"
 			gomega.Expect(appName).NotTo(gomega.BeEmpty())
 
 			gomega.Expect(ingestion.PrepareDocs(appName, "sample_png.pdf")).To(gomega.Succeed())
 
-			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false)).To(gomega.Succeed())
+			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false, appRuntime)).To(gomega.Succeed())
 
-			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false)
+			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false, appRuntime)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(logs).To(gomega.ContainSubstring("Ingestion started"))
 			gomega.Expect(logs).To(gomega.ContainSubstring(completionStr))
@@ -572,14 +521,14 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 			defer cancel()
 
-			completionStr := "No documents found to process in '/var/docs'"
+			completionStr := "File validation failed: Only PDF files are allowed. Invalid file: sample_txt.txt"
 			gomega.Expect(appName).NotTo(gomega.BeEmpty())
 
 			gomega.Expect(ingestion.PrepareDocs(appName, "sample_txt.txt")).To(gomega.Succeed())
 
-			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false)).To(gomega.Succeed())
+			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, false, appRuntime)).To(gomega.Succeed())
 
-			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false)
+			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, false, appRuntime)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			gomega.Expect(logs).To(gomega.ContainSubstring("Ingestion started"))
 			gomega.Expect(logs).To(gomega.ContainSubstring(completionStr))
@@ -719,14 +668,13 @@ var _ = ginkgo.Describe("AI Services End-to-End Tests", ginkgo.Ordered, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 			defer cancel()
 
-			completionStr := "DB Cleaned successfully!"
+			completionStr := "DB cleanup completed successfully"
 			gomega.Expect(appName).NotTo(gomega.BeEmpty())
 
-			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, true)).To(gomega.Succeed())
+			gomega.Expect(ingestion.StartIngestion(ctx, cfg, appName, completionStr, true, appRuntime)).To(gomega.Succeed())
 
-			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, true)
+			logs, err := ingestion.WaitForIngestionLogs(ctx, cfg, appName, completionStr, true, appRuntime)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			gomega.Expect(logs).To(gomega.ContainSubstring("Local cache cleaned up."))
 			gomega.Expect(logs).To(gomega.ContainSubstring(completionStr))
 
 			logger.Infof("[TEST] Clean Ingestion completed successfully for application %s", appName)
