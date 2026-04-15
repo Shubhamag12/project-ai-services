@@ -55,7 +55,7 @@ func (p *PodmanBootstrap) Configure() error {
 		s.Stop("Podman already configured")
 	}
 
-	s = spinner.New("Configuring SMT level")
+	s = spinner.New("Configuring SMT level to 2")
 	s.Start(ctx)
 	// 2. Configure SMT level to 2 and persist via systemd
 	if err := setupSMTLevel(); err != nil {

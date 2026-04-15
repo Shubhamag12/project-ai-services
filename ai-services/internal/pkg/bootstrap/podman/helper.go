@@ -14,6 +14,8 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/spyre"
 )
 
+const smtLevel = 2
+
 func runServiceReport() error {
 	// validate spyre attachment first before running servicereport
 	spyreCheck := spyre.NewSpyreRule()
@@ -169,12 +171,12 @@ func setupSMTLevel() error {
 	logger.Infoln("smtstate.service started successfully", logger.VerbosityLevelDebug)
 
 	// 3. Set SMT level to 2
-	cmd := exec.Command("ppc64_cpu", "--smt=2")
+	cmd := exec.Command("ppc64_cpu", fmt.Sprintf("--smt=%d", smtLevel))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to set SMT level to 2: %v, output: %s", err, string(out))
+		return fmt.Errorf("failed to set SMT level to %d: %v, output: %s", smtLevel, err, string(out))
 	}
-	logger.Infoln("SMT level set to 2", logger.VerbosityLevelDebug)
+	logger.Infoln(fmt.Sprintf("SMT level set to %d", smtLevel), logger.VerbosityLevelDebug)
 
 	// 4. Restart smtstate.service to persist the setting
 	if err := systemctl("restart", "smtstate.service"); err != nil {
