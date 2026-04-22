@@ -163,6 +163,7 @@ func configurePodmanGroups() error {
 	// Check if Spyre cards are present - only needed if Spyre cards exist
 	if !spyre.IsApplicable() {
 		logger.Infoln("No Spyre cards detected. Skipping podman service supplementary groups configuration.", logger.VerbosityLevelDebug)
+
 		return nil
 	}
 
@@ -170,6 +171,7 @@ func configurePodmanGroups() error {
 	checkResult := spyre.CheckPodmanServiceSupplementaryGroups()
 	if checkResult.GetStatus() {
 		logger.Infoln("✓ Podman service supplementary groups already configured", logger.VerbosityLevelDebug)
+
 		return nil
 	}
 
