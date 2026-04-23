@@ -11,9 +11,15 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/check"
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/spyre"
+	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators"
+)
+
+const (
+	// dirPermissions is the default permission for creating directories.
+	dirPermissions = 0755
 )
 
 // configureSpyre validates and repairs Spyre card configuration.
@@ -216,7 +222,7 @@ func fixPodmanServiceSupplementaryGroups() error {
 
 func createPodmanServiceDropIn() error {
 	dropInDir := "/etc/systemd/system/podman.service.d"
-	if err := os.MkdirAll(dropInDir, 0755); err != nil {
+	if err := os.MkdirAll(dropInDir, dirPermissions); err != nil {
 		return err
 	}
 
@@ -225,7 +231,7 @@ func createPodmanServiceDropIn() error {
 SupplementaryGroups=sentient
 `
 
-	return os.WriteFile(dropInFile, []byte(dropInContent), 0644)
+	return os.WriteFile(dropInFile, []byte(dropInContent), utils.FilePermissions)
 }
 
 func reloadAndRestartPodmanServices() error {

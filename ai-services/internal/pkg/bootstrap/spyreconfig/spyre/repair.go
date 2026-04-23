@@ -25,8 +25,6 @@ const (
 	expectedKeyValueParts = 2
 	// maxVfioRuleParts is the maximum number of comma-separated parts in a valid VFIO rule.
 	maxVfioRuleParts = 3
-	// dirPermissions is the default permission for creating directories.
-	dirPermissions = 0755
 )
 
 // RepairResult represents the result of a repair operation.
