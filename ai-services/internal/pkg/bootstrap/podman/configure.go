@@ -69,7 +69,6 @@ func (p *PodmanBootstrap) Configure() error {
 	if err := configurePodmanGroups(); err != nil {
 		return fmt.Errorf("failed to configure podman service supplementary groups: %w", err)
 	}
-
 	s = spinner.New("Configuring SMT level to 2")
 	s.Start(ctx)
 	// 3. Configure SMT level to 2 and persist via systemd

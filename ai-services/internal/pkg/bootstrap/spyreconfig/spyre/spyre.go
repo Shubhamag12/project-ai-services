@@ -75,6 +75,7 @@ func RunChecks() []check.CheckResult {
 		checkUserGroup(),
 		checkVfioModule(),
 		checkVfioAccessPermission(),
+		CheckPodmanServiceSupplementaryGroups(),
 	}
 }
 
