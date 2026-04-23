@@ -78,7 +78,7 @@ func RunChecks() []check.CheckResult {
 	}
 
 	// Only check podman service configuration if podman is installed
-	if err := utils.PodmanHealthCheck(); err != nil {
+	if _, err := utils.Podman(); err == nil {
 		checks = append(checks, CheckPodmanServiceSupplementaryGroups())
 	}
 
