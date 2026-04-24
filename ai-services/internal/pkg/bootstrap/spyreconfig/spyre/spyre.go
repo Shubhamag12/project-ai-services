@@ -315,7 +315,7 @@ func checkMemlockConf() *check.ConfigurationFileCheck {
 
 // checkNofileConf validates user nofile limit configuration.
 func checkNofileConf() *check.ConfigurationFileCheck {
-	expectedConf := "sentient hard nofile 134217728"
+	expectedConf := "@sentient hard nofile 134217728"
 	configFile := "/etc/security/limits.conf"
 
 	confCheck := check.NewConfigurationFileCheck("User nofile limit configuration", configFile)
@@ -335,8 +335,8 @@ func isNofileLimitConfigValid(configFile, expectedConf string) bool {
 		return false
 	}
 
-	// Pattern to match: sentient hard nofile <value>
-	nofilePattern := regexp.MustCompile(`^sentient\s+hard\s+nofile\s+(\d+)$`)
+	// Pattern to match: @sentient hard nofile <value>
+	nofilePattern := regexp.MustCompile(`^@sentient\s+hard\s+nofile\s+(\d+)$`)
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -354,7 +354,7 @@ func isNofileLimitConfigValid(configFile, expectedConf string) bool {
 		// Parse current line
 		matches := nofilePattern.FindStringSubmatch(line)
 		if matches != nil {
-			// Found a nofile config for sentient group
+			// Found a nofile config for @sentient group
 			lineValue := matches[1]
 			lineInt, err := strconv.Atoi(lineValue)
 			if err != nil {

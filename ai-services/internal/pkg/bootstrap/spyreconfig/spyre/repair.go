@@ -196,12 +196,12 @@ func fixNofileConf(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	// Remove old sentient nofile lines.
+	// Remove old @sentient nofile lines.
 	var updatedLines []string
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Skip lines that configure nofile for sentient group
-		if strings.HasPrefix(trimmed, "sentient") && strings.Contains(trimmed, "nofile") {
+		// Skip lines that configure nofile for @sentient group
+		if strings.HasPrefix(trimmed, "@sentient") && strings.Contains(trimmed, "nofile") {
 			continue
 		}
 		updatedLines = append(updatedLines, line)
