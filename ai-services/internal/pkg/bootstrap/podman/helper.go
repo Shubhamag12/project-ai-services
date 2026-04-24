@@ -116,7 +116,19 @@ func logRepairResults(results []spyre.RepairResult) {
 }
 
 func configureUsergroup() error {
-	cmd_str := `usermod -aG sentient $USER`
+	username := os.Getenv("SUDO_USER")
+	if username == "" {
+		// Fallback to current user if not running via sudo
+		username = os.Getenv("USER")
+		if username == "" {
+			username = os.Getenv("LOGNAME")
+		}
+	}
+	if username == "" {
+		return fmt.Errorf("failed to determine current username: SUDO_USER, USER and LOGNAME environment variables are not set")
+	}
+
+	cmd_str := fmt.Sprintf("usermod -aG sentient %s", username)
 	cmd := exec.Command("bash", "-c", cmd_str)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

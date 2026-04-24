@@ -128,7 +128,7 @@ func FindFreeSpyreCards() ([]string, error) {
 		}
 		f, err := os.Open("/dev/vfio/" + dev_file.Name())
 		if err != nil {
-			logger.Infoln("Device or resource busy, skipping.., err: %w", logger.VerbosityLevelDebug)
+			logger.Infof("Device or resource busy, skipping.., err: %v", err, logger.VerbosityLevelDebug)
 
 			continue
 		}

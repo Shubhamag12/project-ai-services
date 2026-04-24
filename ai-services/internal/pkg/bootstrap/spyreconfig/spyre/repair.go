@@ -1,6 +1,7 @@
 package spyre
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -50,6 +51,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	// Fix checks in dependency order.
 	results = append(results, fixVFIODriverConfig(checkMap))
 	results = append(results, fixMemlockConf(checkMap))
+	results = append(results, fixNofileConf(checkMap))
 	results = append(results, fixUdevRule(checkMap))
 	results = append(results, fixVFIOPCIConf(checkMap))
 	userGroupResult := fixUserGroup(checkMap)
@@ -57,6 +59,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	results = append(results, fixVFIOModule(checkMap))
 	results = append(results, fixVFIOPermissions(checkMap, userGroupResult))
 	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
+	results = append(results, fixSystemdUserSliceLimits(checkMap))
 
 	return results
 }
@@ -176,6 +179,54 @@ func fixMemlockConf(checkMap map[string]check.CheckResult) RepairResult {
 	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
 }
 
+// fixNofileConf repairs user nofile limit configuration.
+func fixNofileConf(checkMap map[string]check.CheckResult) RepairResult {
+	checkName := "User nofile limit configuration"
+	chk, ok := getCheckFromMap(checkMap, checkName)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	confCheck, ok := chk.(*check.ConfigurationFileCheck)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
+	}
+
+	// Read existing file.
+	lines, err := utils.ReadFileLines(confCheck.FilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	// Remove old @sentient nofile lines.
+	var updatedLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that configure nofile for @sentient group
+		if strings.HasPrefix(trimmed, "@sentient") && strings.Contains(trimmed, "nofile") {
+			continue
+		}
+		updatedLines = append(updatedLines, line)
+	}
+
+	// Add new configuration.
+	for key, attr := range confCheck.Attributes {
+		if !attr.Status {
+			updatedLines = append(updatedLines, key)
+		}
+	}
+
+	// Write back.
+	content := strings.Join(updatedLines, "\n")
+	if err := utils.WriteToFile(confCheck.FilePath, content); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	msg := "File descriptor limit set. User must be in sentient group and re-login for changes to take effect"
+
+	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
+}
+
 // fixUdevRule repairs VFIO udev rules.
 func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "VFIO udev rules configuration"
@@ -189,7 +240,10 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
 	}
 
-	expectedRule := `SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`
+	expectedRules := []string{
+		`SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`,
+		`KERNEL=="vfio", GROUP:="sentient", MODE:="0660"`,
+	}
 
 	// Read existing file if it exists.
 	var updatedLines []string
@@ -207,8 +261,8 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		}
 	}
 
-	// Add the correct rule at the beginning.
-	updatedLines = append([]string{expectedRule}, updatedLines...)
+	// Add the correct rules at the beginning.
+	updatedLines = append(expectedRules, updatedLines...)
 
 	// Write back.
 	content := strings.Join(updatedLines, "\n") + "\n"
@@ -216,6 +270,7 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
+	// Note: Udev rules are reloaded by fixVFIOPermissions() which runs after this function.
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
@@ -442,6 +497,83 @@ func reloadAndRestartPodmanServices() error {
 	}
 
 	return nil
+}
+
+// fixSystemdUserSliceLimits configures systemd user slice limits for rootless podman.
+// This ensures that containers started by non-root users have proper ulimits
+func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResult {
+	checkName := "Systemd user slice limits configuration"
+	chk, ok := getCheckFromMap(checkMap, checkName)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	// Skip if check passed
+	if chk.GetStatus() {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	// Get the SUDO_USER to configure their slice
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusNotFixable,
+			Message:   "Not running via sudo, cannot configure user slice",
+		}
+	}
+
+	// Get user ID
+	exitCode, stdout, stderr, err := utils.ExecuteCommand("id", "-u", sudoUser)
+	if err != nil || exitCode != 0 {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to get user ID: %v, stderr: %s", err, stderr),
+		}
+	}
+
+	userID := strings.TrimSpace(stdout)
+	sliceDir := fmt.Sprintf("/etc/systemd/system/user-%s.slice.d", userID)
+	limitsFile := fmt.Sprintf("%s/limits.conf", sliceDir)
+
+	// Create directory
+	if err := os.MkdirAll(sliceDir, dirPermissions); err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to create directory %s: %w", sliceDir, err),
+		}
+	}
+
+	// Write limits configuration
+	limitsContent := `[Slice]
+LimitNOFILE=134217728
+LimitMEMLOCK=infinity
+`
+	if err := utils.WriteToFile(limitsFile, limitsContent); err != nil {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to write limits file: %w", err),
+		}
+	}
+
+	// Reload systemd daemon
+	exitCode, _, stderr, err = utils.ExecuteCommand("systemctl", "daemon-reload")
+	if err != nil || exitCode != 0 {
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to reload systemd: %v, stderr: %s", err, stderr),
+		}
+	}
+
+	return RepairResult{
+		CheckName: checkName,
+		Status:    StatusFixed,
+		Message:   fmt.Sprintf("Configured systemd slice limits for user %s (UID: %s)", sudoUser, userID),
+	}
 }
 
 // Made with Bob

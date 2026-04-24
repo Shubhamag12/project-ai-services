@@ -47,9 +47,26 @@ func ListModels(template, appName string) ([]string, error) {
 
 func DownloadModel(model, targetDir string) error {
 	// check for target model directory
-	if _, err := os.Stat(targetDir); err != nil {
-		return fmt.Errorf("user does not have permission to access the directory: %s, err: %w", targetDir, err)
+	fileInfo, err := os.Stat(targetDir)
+	if err != nil {
+		return fmt.Errorf("cannot access directory: %s, err: %w", targetDir, err)
 	}
+
+	// verify it's a directory
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", targetDir)
+	}
+
+	// check if user has write permissions to the directory
+	// try to create a temporary file to verify write access
+	testFile := targetDir + "/.write_test"
+	f, err := os.Create(testFile)
+	if err != nil {
+		return fmt.Errorf("user does not have write permission to directory: %s, err: %w", targetDir, err)
+	}
+	f.Close()
+	os.Remove(testFile)
+
 	logger.Infof("Downloading model %s to %s\n", model, targetDir)
 
 	// Get Podman client
