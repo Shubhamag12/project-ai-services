@@ -50,6 +50,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	// Fix checks in dependency order.
 	results = append(results, fixVFIODriverConfig(checkMap))
 	results = append(results, fixMemlockConf(checkMap))
+	results = append(results, fixNofileConf(checkMap))
 	results = append(results, fixUdevRule(checkMap))
 	results = append(results, fixVFIOPCIConf(checkMap))
 	userGroupResult := fixUserGroup(checkMap)
@@ -172,6 +173,54 @@ func fixMemlockConf(checkMap map[string]check.CheckResult) RepairResult {
 	}
 
 	msg := "Memlock limit set. User must be in sentient group: sudo usermod -aG sentient <user>"
+
+	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
+}
+
+// fixNofileConf repairs user nofile limit configuration.
+func fixNofileConf(checkMap map[string]check.CheckResult) RepairResult {
+	checkName := "User nofile limit configuration"
+	chk, ok := getCheckFromMap(checkMap, checkName)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	confCheck, ok := chk.(*check.ConfigurationFileCheck)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
+	}
+
+	// Read existing file.
+	lines, err := utils.ReadFileLines(confCheck.FilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	// Remove old sentient nofile lines.
+	var updatedLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that configure nofile for sentient group
+		if strings.HasPrefix(trimmed, "sentient") && strings.Contains(trimmed, "nofile") {
+			continue
+		}
+		updatedLines = append(updatedLines, line)
+	}
+
+	// Add new configuration.
+	for key, attr := range confCheck.Attributes {
+		if !attr.Status {
+			updatedLines = append(updatedLines, key)
+		}
+	}
+
+	// Write back.
+	content := strings.Join(updatedLines, "\n")
+	if err := utils.WriteToFile(confCheck.FilePath, content); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	msg := "File descriptor limit set. User must be in sentient group and re-login for changes to take effect"
 
 	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
 }

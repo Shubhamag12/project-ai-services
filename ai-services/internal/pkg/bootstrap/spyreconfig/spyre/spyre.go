@@ -71,6 +71,7 @@ func RunChecks() []check.CheckResult {
 		checkDriverConfig(),
 		checkUdevRule(),
 		checkMemlockConf(),
+		checkNofileConf(),
 		checkVfioPciConf(),
 		checkUserGroup(),
 		checkVfioModule(),
@@ -310,6 +311,65 @@ func checkMemlockConf() *check.ConfigurationFileCheck {
 	confCheck.SetStatus(status)
 
 	return confCheck
+}
+
+// checkNofileConf validates user nofile limit configuration.
+func checkNofileConf() *check.ConfigurationFileCheck {
+	expectedConf := "sentient hard nofile 134217728"
+	configFile := "/etc/security/limits.conf"
+
+	confCheck := check.NewConfigurationFileCheck("User nofile limit configuration", configFile)
+
+	status := isNofileLimitConfigValid(configFile, expectedConf)
+	confCheck.AddAttribute(expectedConf, status, "", "")
+	confCheck.SetStatus(status)
+
+	return confCheck
+}
+
+// isNofileLimitConfigValid checks if nofile limit configuration is valid.
+func isNofileLimitConfigValid(configFile, expectedConf string) bool {
+	lines, err := utils.ReadFileLines(configFile)
+	if err != nil {
+		log.Printf("Error reading %s: %v", configFile, err)
+		return false
+	}
+
+	// Pattern to match: sentient hard nofile <value>
+	nofilePattern := regexp.MustCompile(`^sentient\s+hard\s+nofile\s+(\d+)$`)
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Check for exact match first
+		if line == expectedConf {
+			return true
+		}
+
+		// Parse current line
+		matches := nofilePattern.FindStringSubmatch(line)
+		if matches != nil {
+			// Found a nofile config for sentient group
+			lineValue := matches[1]
+			lineInt, err := strconv.Atoi(lineValue)
+			if err != nil {
+				continue
+			}
+
+			// Check if the value meets or exceeds the expected value (134217728)
+			expectedInt, _ := strconv.Atoi("134217728")
+			if lineInt >= expectedInt {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // checkVfioPciConf validates VFIO module dep configuration.
