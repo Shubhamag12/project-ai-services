@@ -188,36 +188,43 @@ func checkDriverConfig() *check.ConfigurationFileCheck {
 // checkUdevRule validates VFIO udev rules configuration.
 func checkUdevRule() *check.ConfigurationFileCheck {
 	configFile := "/etc/udev/rules.d/95-vfio-3.rules"
-	expectedRule := `SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`
+	expectedRules := []string{
+		`SUBSYSTEM=="vfio", GROUP:="sentient", MODE:="0660"`,
+		`KERNEL=="vfio", GROUP:="sentient", MODE:="0660"`,
+	}
 	confCheck := check.NewConfigurationFileCheck("VFIO udev rules configuration", configFile)
 
-	status := false
 	lines, ok := readConfigFileLines(configFile)
-	if ok {
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
+	if !ok {
+		for _, rule := range expectedRules {
+			confCheck.AddAttribute(rule, false, "", "")
+		}
+		confCheck.SetStatus(false)
+		return confCheck
+	}
 
+	foundRules := make(map[string]bool)
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		for _, expectedRule := range expectedRules {
 			if line == expectedRule {
-				status = true
-
-				break
-			}
-
-			// Check for incorrect vfio rules.
-			if strings.Contains(line, `SUBSYSTEM=="vfio"`) &&
-				(strings.Contains(line, "GROUP:=") || strings.Contains(line, "MODE:=")) {
-				status = false
-
-				break
+				foundRules[expectedRule] = true
 			}
 		}
 	}
 
-	confCheck.AddAttribute(expectedRule, status, "", "")
-	confCheck.SetStatus(status)
+	allFound := true
+	for _, rule := range expectedRules {
+		found := foundRules[rule]
+		confCheck.AddAttribute(rule, found, "", "")
+		allFound = allFound && found
+	}
+
+	confCheck.SetStatus(allFound)
 
 	return confCheck
 }
@@ -456,11 +463,6 @@ func checkVfioAccessPermission() *check.FilesCheck {
 
 	status := true
 	for _, entry := range entries {
-		// Skip /dev/vfio/vfio file.
-		if entry.Name() == "vfio" {
-			continue
-		}
-
 		fullPath := filepath.Join(vfioDir, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
