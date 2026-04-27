@@ -240,7 +240,7 @@ func ReloadUdevRules() error {
 	}
 
 	// Trigger for the vfio kernel device (/dev/vfio/vfio)
-	if err := executeCommandOrFail("udevadm", "trigger", "--name-match=vfio"); err != nil {
+	if err := executeCommandOrFail("udevadm", "trigger", "--name-match=/dev/vfio/vfio"); err != nil {
 		return fmt.Errorf("failed to trigger vfio device: %w", err)
 	}
 
