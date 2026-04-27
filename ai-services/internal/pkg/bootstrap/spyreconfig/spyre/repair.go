@@ -270,11 +270,7 @@ func fixUdevRule(checkMap map[string]check.CheckResult) RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	// Reload udev rules and trigger them to apply changes.
-	if err := utils.ReloadUdevRules(); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: fmt.Errorf("failed to reload udev rules: %w", err)}
-	}
-
+	// Note: Udev rules are reloaded by fixVFIOPermissions() which runs after this function.
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
