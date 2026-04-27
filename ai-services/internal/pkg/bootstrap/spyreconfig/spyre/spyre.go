@@ -77,6 +77,7 @@ func RunChecks() []check.CheckResult {
 		checkVfioModule(),
 		checkVfioAccessPermission(),
 		checkPodmanServiceSupplementaryGroups(),
+		checkSystemdUserSliceLimits(),
 	}
 }
 
@@ -599,6 +600,68 @@ func setCheckResult(confCheck *check.ConfigurationFileCheck, found, correctValue
 		confCheck.AddAttribute("SupplementaryGroups=sentient", false, "not found", sentientGroup)
 		confCheck.SetStatus(false)
 	}
+}
+
+// checkSystemdUserSliceLimits validates that systemd user slice limits are configured for rootless podman.
+func checkSystemdUserSliceLimits() *check.ConfigurationFileCheck {
+	checkName := "Systemd user slice limits configuration"
+	confCheck := check.NewConfigurationFileCheck(checkName, "")
+
+	// Get the SUDO_USER to check their slice
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		// Not running via sudo, skip this check
+		confCheck.SetStatus(true)
+		return confCheck
+	}
+
+	// Get user ID
+	exitCode, stdout, stderr, err := utils.ExecuteCommand("id", "-u", sudoUser)
+	if err != nil || exitCode != 0 {
+		log.Printf("Failed to get user ID for %s: %v, stderr: %s", sudoUser, err, stderr)
+		confCheck.SetStatus(false)
+		return confCheck
+	}
+
+	userID := strings.TrimSpace(stdout)
+	limitsFile := fmt.Sprintf("/etc/systemd/system/user-%s.slice.d/limits.conf", userID)
+	confCheck.FilePath = limitsFile
+
+	// Check if limits file exists
+	if !utils.FileExists(limitsFile) {
+		confCheck.AddAttribute("LimitNOFILE=134217728", false, "not found", "134217728")
+		confCheck.AddAttribute("LimitMEMLOCK=infinity", false, "not found", "infinity")
+		confCheck.SetStatus(false)
+		return confCheck
+	}
+
+	// Read and validate limits file
+	lines, err := utils.ReadFileLines(limitsFile)
+	if err != nil {
+		log.Printf("Failed to read %s: %v", limitsFile, err)
+		confCheck.SetStatus(false)
+		return confCheck
+	}
+
+	hasNofile := false
+	hasMemlock := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if after, ok := strings.CutPrefix(line, "LimitNOFILE="); ok {
+			value := after
+			hasNofile = value == "134217728"
+		}
+		if after, ok := strings.CutPrefix(line, "LimitMEMLOCK="); ok {
+			value := after
+			hasMemlock = value == "infinity"
+		}
+	}
+
+	confCheck.AddAttribute("LimitNOFILE=134217728", hasNofile, "", "134217728")
+	confCheck.AddAttribute("LimitMEMLOCK=infinity", hasMemlock, "", "infinity")
+	confCheck.SetStatus(hasNofile && hasMemlock)
+
+	return confCheck
 }
 
 // Made with Bob

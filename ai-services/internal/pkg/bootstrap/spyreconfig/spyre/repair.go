@@ -59,7 +59,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	results = append(results, fixVFIOModule(checkMap))
 	results = append(results, fixVFIOPermissions(checkMap, userGroupResult))
 	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
-	results = append(results, fixSystemdUserSliceLimits())
+	results = append(results, fixSystemdUserSliceLimits(checkMap))
 
 	return results
 }
@@ -501,16 +501,25 @@ func reloadAndRestartPodmanServices() error {
 
 // fixSystemdUserSliceLimits configures systemd user slice limits for rootless podman.
 // This ensures that containers started by non-root users have proper ulimits
-func fixSystemdUserSliceLimits() RepairResult {
+func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "Systemd user slice limits configuration"
+	chk, ok := getCheckFromMap(checkMap, checkName)
+	if !ok {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
+
+	// Skip if check passed
+	if chk.GetStatus() {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped}
+	}
 
 	// Get the SUDO_USER to configure their slice
 	sudoUser := os.Getenv("SUDO_USER")
 	if sudoUser == "" {
 		return RepairResult{
 			CheckName: checkName,
-			Status:    StatusSkipped,
-			Message:   "Not running via sudo, skipping user slice configuration",
+			Status:    StatusNotFixable,
+			Message:   "Not running via sudo, cannot configure user slice",
 		}
 	}
 
