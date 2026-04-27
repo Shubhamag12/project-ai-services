@@ -20,7 +20,6 @@ const (
 	spyreDeviceIDRev2 = "06a8"
 	sentientGroup     = "sentient"
 	vfioConfigFile    = "/etc/modprobe.d/vfio-pci.conf"
-	memLimitPerCard   = 134234112 // 128MB in bytes - memory lock limit per Spyre card
 )
 
 // Package-level regex patterns compiled once for performance.
@@ -307,9 +306,7 @@ func isMemLimitConfigValid(configFile, expectedConf string) bool {
 
 // checkMemlockConf validates user memlock configuration.
 func checkMemlockConf() *check.ConfigurationFileCheck {
-	numCards := GetNumberOfSpyreCards()
-	memlimit := numCards * memLimitPerCard
-	expectedConf := fmt.Sprintf("@sentient - memlock %d", memlimit)
+	expectedConf := "@sentient - memlock unlimited"
 	configFile := "/etc/security/limits.d/memlock.conf"
 
 	confCheck := check.NewConfigurationFileCheck("User memlock configuration", configFile)
