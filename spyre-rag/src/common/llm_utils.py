@@ -5,10 +5,13 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
-from common.lang_utils import prompt_map
+from common.lang_utils import get_prompt_for_language
 from common.misc_utils import get_logger
-from common.settings import get_settings
+from common.settings import settings
 from common.retry_utils import retry_on_transient_error
+from chatbot.settings import settings as chatbot_settings
+from summarize.settings import settings as summarize_settings
+from digitize.settings import settings as digitize_settings
 import common.misc_utils as misc_utils
 
 logger = get_logger("LLM")
@@ -22,27 +25,12 @@ def tqdm_wrapper(iterable, **kwargs):
     else:
         return iterable
 
-settings = get_settings()
-
-def classify_text_with_llm(text_blocks, gen_model, llm_endpoint, pdf_path, batch_size=32):
-    all_prompts = [settings.prompts.llm_classify.format(text=item.strip()) for item in text_blocks]
-    decisions = []
-
-    # Process in batches using ThreadPoolExecutor for parallelism
-    with ThreadPoolExecutor(max_workers=batch_size) as executor:
-        futures = {
-            executor.submit(classify_single_text, prompt, gen_model, llm_endpoint): idx
-            for idx, prompt in enumerate(all_prompts)
-        }
-
-        for future in tqdm_wrapper(as_completed(futures), total=len(all_prompts),
-                                   desc=f"Classifying table summaries of '{pdf_path}'"):
-            decisions.append(future.result())
-
-    return decisions
-
 @retry_on_transient_error(max_retries=3, initial_delay=1.0, backoff_multiplier=2.0)
-def classify_single_text(prompt, gen_model, llm_endpoint):
+def summarize_and_classify_single_table(prompt, gen_model, llm_endpoint):
+    """
+    Combined function to summarize and classify a table in a single LLM call.
+    Returns tuple: (summary, decision)
+    """
     if misc_utils.SESSION is None:
         raise RuntimeError("LLM session not initialized. Call create_llm_session() first.")
 
@@ -50,48 +38,90 @@ def classify_single_text(prompt, gen_model, llm_endpoint):
         "model": gen_model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
-        "max_tokens": 3,
-    }
-    response = misc_utils.SESSION.post(f"{llm_endpoint}/v1/chat/completions", json=payload)
-    response.raise_for_status()
-    result = response.json()
-    reply = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip().lower()
-    return "yes" in reply
-
-@retry_on_transient_error(max_retries=3, initial_delay=1.0, backoff_multiplier=2.0)
-def summarize_single_table(prompt, gen_model, llm_endpoint):
-    if misc_utils.SESSION is None:
-        raise RuntimeError("LLM session not initialized. Call create_llm_session() first.")
-
-    payload = {
-        "model": gen_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0,
-        "max_tokens": 512,
+        "max_tokens": summarize_settings.summarize.table_summary_max_tokens,
         "stream": False,
     }
 
-    response = misc_utils.SESSION.post(f"{llm_endpoint}/v1/chat/completions", json=payload)
-    response.raise_for_status()
-    result = response.json()
-    reply = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip().lower()
-    return reply
+    try:
+        response = misc_utils.SESSION.post(f"{llm_endpoint}/v1/chat/completions", json=payload)
+        response.raise_for_status()
+        data = response.json() or {}
+        choices = data.get("choices", [])
+        text = ""
+        if choices:
+            text = (choices[0].get("message", {}).get("content") or "").strip()
 
-def summarize_table(table_html, gen_model, llm_endpoint, pdf_path, max_workers=32):
-    all_prompts = [settings.prompts.table_summary.format(content=html) for html in table_html]
+        # Parse response - handle multi-line summaries
+        summary = ""
+        decision = False
+        lines = text.splitlines()
 
-    summaries = [None] * len(all_prompts)
+        # Find Summary: and Decision: lines
+        summary_start = -1
+        decision_line = -1
+
+        for i, line in enumerate(lines):
+            line_lower = line.strip().lower()
+            if line_lower.startswith("summary:"):
+                summary_start = i
+            elif line_lower.startswith("decision:"):
+                decision_line = i
+                decision = "yes" in line_lower
+
+        # Extract summary (everything between "Summary:" and "Decision:")
+        if summary_start >= 0:
+            if decision_line > summary_start:
+                # Summary is between Summary: and Decision:
+                summary_lines = lines[summary_start:decision_line]
+                # Remove "Summary:" prefix from first line
+                summary_lines[0] = summary_lines[0][summary_lines[0].lower().find("summary:") + len("summary:"):].strip()
+                summary = "\n".join(line.strip() for line in summary_lines if line.strip())
+            else:
+                # No decision found, take everything after Summary:
+                summary_lines = lines[summary_start:]
+                summary_lines[0] = summary_lines[0][summary_lines[0].lower().find("summary:") + len("summary:"):].strip()
+                summary = "\n".join(line.strip() for line in summary_lines if line.strip())
+
+        return summary or "No summary.", decision
+
+    except Exception as e:
+        logger.error(f"Error summarizing/classifying table: {e}")
+        return "No summary.", False
+
+def summarize_and_classify_tables(table_mds, gen_model, llm_endpoint, pdf_path, max_workers=32):
+    """
+    Combined function to summarize and classify tables using a single prompt.
+    Returns tuple: (summaries, decisions)
+    """
+    all_prompts = [digitize_settings.digitize.table_summary_and_classify.format(content=md) for md in table_mds]
+
+    results: list[tuple[str, bool] | None] = [None] * len(all_prompts)
 
     with ThreadPoolExecutor(max_workers=min(max_workers, len(all_prompts))) as executor:
         futures = {
-            executor.submit(summarize_single_table, prompt, gen_model, llm_endpoint): idx
+            executor.submit(summarize_and_classify_single_table, prompt, gen_model, llm_endpoint): idx
             for idx, prompt in enumerate(all_prompts)
         }
-        for future in tqdm_wrapper(as_completed(futures), total=len(all_prompts), desc=f"Summarizing tables of '{pdf_path}'"):
+        for future in tqdm_wrapper(as_completed(futures), total=len(all_prompts),
+                                   desc=f"Summarizing and classifying tables of '{pdf_path}'"):
             idx = futures[future]
-            summaries[idx] = future.result()
+            results[idx] = future.result()
 
-    return summaries
+    # Separate summaries and decisions with proper None handling
+    summaries: list[str] = []
+    decisions: list[bool] = []
+
+    for result in results:
+        if result is not None:
+            summary, decision = result
+            summaries.append(summary)
+            decisions.append(decision)
+        else:
+            # Default values for failed futures
+            summaries.append("No summary.")
+            decisions.append(False)
+
+    return summaries, decisions
 
 @retry_on_transient_error(max_retries=3, initial_delay=1.0, backoff_multiplier=2.0)
 def query_vllm_models(llm_endpoint):
@@ -112,12 +142,15 @@ def query_vllm_payload(question, documents, llm_endpoint, llm_model, stop_words,
 
     # dynamic chunk truncation: truncates the context, if doesn't fit in the sequence length
     question_token_count = len(tokenize_with_llm(question, llm_endpoint))
-    reamining_tokens = settings.max_input_length - (settings.prompt_template_token_count + question_token_count)
+    reamining_tokens = settings.llm.max_input_length - (
+        chatbot_settings.chatbot.prompt_template_token_count + question_token_count
+    )
     context = detokenize_with_llm(tokenize_with_llm(context, llm_endpoint)[:reamining_tokens], llm_endpoint)
     logger.debug(f"Truncated Context: {context}")
 
-    prompt_key = prompt_map.get(lang, "query_vllm_stream")
-    prompt = getattr(settings.prompts, prompt_key).format(context=context, question=question)
+    # Get the appropriate prompt template based on language and format it
+    prompt_template = get_prompt_for_language(lang)
+    prompt = prompt_template.format(context=context, question=question)
 
     logger.debug("PROMPT:  ", prompt)
     headers = {
@@ -128,7 +161,7 @@ def query_vllm_payload(question, documents, llm_endpoint, llm_model, stop_words,
         "messages": [{"role": "user", "content": prompt}],
         "model": llm_model,
         "max_tokens": max_new_tokens,
-        "repetition_penalty": 1.1,
+        "frequency_penalty": 1.1,
         "temperature": temperature,
         "stop": stop_words,
         "stream": stream
@@ -144,7 +177,7 @@ def query_vllm_non_stream(question, documents, llm_endpoint, llm_model, stop_wor
     if misc_utils.SESSION is None:
         raise RuntimeError("LLM session not initialized. Call create_llm_session() first.")
 
-    headers, payload = query_vllm_payload(question, documents, llm_endpoint, llm_model, stop_words, max_new_tokens, temperature, False, lang )
+    headers, payload = query_vllm_payload(question, documents, llm_endpoint, llm_model, stop_words, max_new_tokens, temperature, False, lang)
 
     # Use requests for synchronous HTTP requests
     start_time = time.time()
@@ -233,7 +266,7 @@ def query_vllm_summarize(
         "accept": "application/json",
         "Content-type": "application/json",
     }
-    stop_words = [w for w in settings.summarization_stop_words.split(",") if w]
+    stop_words = [w for w in summarize_settings.summarize.summarization_stop_words.split(",") if w]
     payload = {
         "messages": messages,
         "model": model,
@@ -277,7 +310,7 @@ def query_vllm_summarize_stream(
         "accept": "application/json",
         "Content-type": "application/json",
     }
-    stop_words = [w for w in settings.summarization_stop_words.split(",") if w]
+    stop_words = [w for w in summarize_settings.summarize.summarization_stop_words.split(",") if w]
     payload = {
         "messages": messages,
         "model": model,

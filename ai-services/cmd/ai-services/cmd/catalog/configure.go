@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
@@ -36,13 +37,12 @@ Examples:
 	 ai-services catalog configure --runtime podman
 	 
 	 # Configure with custom UI port
-	 ai-services catalog configure --runtime podman --params ui.port=3000`,
+	 ai-services catalog configure --runtime podman --params ui.port=8081`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
 			var err error
 			argParams, err = validateConfigureFlags(rawArgParams)
-			_ = argParams
 
 			return err
 		},
@@ -53,15 +53,11 @@ Examples:
 				return fmt.Errorf("failed to read admin password: %w", err)
 			}
 
-			_ = adminPassword
-
-			return nil
-
-			// return bootstrap.Run(bootstrap.BootstrapOptions{
-			// 	AdminPassword: adminPassword,
-			// 	Runtime:       vars.RuntimeFactory.GetRuntimeType(),
-			// 	ArgParams:     argParams,
-			// })
+			return configure.Run(configure.ConfigureOptions{
+				AdminPassword: adminPassword,
+				Runtime:       vars.RuntimeFactory.GetRuntimeType(),
+				ArgParams:     argParams,
+			})
 		},
 	}
 
@@ -112,7 +108,7 @@ func configureConfigureFlags(cmd *cobra.Command, rawArgParams *[]string) {
 		"Inline parameters to configure the catalog service.\n\n"+
 			"Format:\n"+
 			"- Comma-separated key=value pairs\n"+
-			"- Example: --params ui.port=3000\n\n"+
+			"- Example: --params ui.port=8081\n\n"+
 			"Available parameters:\n"+
 			"- ui.port: Port for the catalog UI (default: random available port)\n",
 	)

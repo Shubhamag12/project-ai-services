@@ -1,6 +1,6 @@
 REGISTRY ?= icr.io/ai-services-private
 IMAGE ?= catalog-ui
-TAG ?= v0.0.1
+TAG ?= v0.0.2
 CREDS_ARG := $(if $(and $(REGISTRY_USER),$(REGISTRY_PASSWORD)),--creds="$(REGISTRY_USER):$(REGISTRY_PASSWORD)")
 
 CONTAINER_BUILDER ?= podman
@@ -18,7 +18,7 @@ push:
 run:
 	$(CONTAINER_BUILDER) run -d \
 		--name $(IMAGE) \
-		-p 3000:3000 \
+		-p 8081:8081 \
 		$(FULL_IMAGE)
 
 stop:

@@ -5,16 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"text/template"
-	"time"
 
+	"github.com/project-ai-services/ai-services/assets"
 	"github.com/project-ai-services/ai-services/internal/pkg/application/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
+	clipodman "github.com/project-ai-services/ai-services/internal/pkg/cli/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/image"
@@ -23,24 +22,21 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/specs"
 	"github.com/project-ai-services/ai-services/internal/pkg/spinner"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
-	"github.com/project-ai-services/ai-services/internal/pkg/validators"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
 
 var (
-	extraContainerReadinessTimeout = 5 * time.Minute
-	containerCreationTimeout       = 10 * time.Minute
-	envMutex                       sync.Mutex
+	envMutex sync.Mutex
 )
 
 // Create deploys a new application based on a template.
 func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions) error {
 	// Proceed to create application
 	logger.Infof("Creating application '%s' using template '%s'\n", opts.Name, opts.TemplateName)
-	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
+	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	// validate whether the provided template name is correct
-	if err := validators.ValidateAppTemplateExist(tp, opts.TemplateName); err != nil {
+	if err := tp.AppTemplateExist(opts.TemplateName); err != nil {
 		return err
 	}
 
@@ -89,7 +85,7 @@ func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions
 }
 
 func (p *PodmanApplication) validateAndAllocateSpyreCards(templateName, appName string, tmpls map[string]*template.Template) ([]string, error) {
-	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
+	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	reqSpyreCardsCount, err := p.calculateReqSpyreCards(tp, utils.ExtractMapKeys(tmpls), templateName, appName)
 	if err != nil {
@@ -143,7 +139,7 @@ func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.Cr
 		return fmt.Errorf("failed while checking existing pods for application: %w", err)
 	}
 
-	tp := templates.NewEmbedTemplateProvider(templates.EmbedOptions{})
+	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	// execute the pod Templates
 	if err := p.executePodTemplates(tp, opts.Name, appMetadata, tmpls, pciAddresses, existingPods, opts.ValuesFiles, opts.ArgParams); err != nil {
@@ -155,7 +151,7 @@ func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.Cr
 	logger.Infoln("-------")
 
 	// print the next steps to be performed at the end of create
-	if err := helpers.PrintNextSteps(p.runtime, opts.Name, opts.TemplateName); err != nil {
+	if err := helpers.PrintNextSteps(tp, p.runtime, opts.Name, opts.TemplateName); err != nil {
 		// do not want to fail the overall create if we cannot print next steps
 		logger.Infof("failed to display next steps: %v\n", err)
 
@@ -294,11 +290,14 @@ func (p *PodmanApplication) fetchSpyreCardsFromPodAnnotations(annotations map[st
 }
 
 func (p *PodmanApplication) downloadImagesForTemplate(templateName, appName string, imagePullPolicy image.ImagePullPolicy) error {
-	// create a new imagePull object based on imagePullPolicy
-	imagePull := image.NewImagePull(p.runtime, imagePullPolicy, appName, templateName)
+	// create Images struct and run with the specified policy
+	img := &image.Images{
+		Runtime:     p.runtime,
+		App:         appName,
+		AppTemplate: templateName,
+	}
 
-	// based on the imagePullPolicy set, download the images
-	return imagePull.Run()
+	return img.Run(imagePullPolicy)
 }
 
 func (p *PodmanApplication) executePodTemplates(tp templates.Template,
@@ -400,7 +399,7 @@ func (p *PodmanApplication) executePodTemplateLayer(tp templates.Template, tmpls
 	reader := bytes.NewReader(rendered.Bytes())
 
 	// Deploy the Pod and do Readiness check
-	if err := p.deployPodAndReadinessCheck(podSpec, podTemplateName, reader, p.constructPodDeployOptions(podAnnotations)); err != nil {
+	if err := clipodman.DeployPodAndReadinessCheck(p.runtime, podSpec, podTemplateName, reader, clipodman.ConstructPodDeployOptions(podAnnotations)); err != nil {
 		return fmt.Errorf("'%s': Failed to deploy pod and do readiness check: %w", podTemplateName, err)
 	}
 
@@ -442,178 +441,4 @@ func (p *PodmanApplication) returnEnvParamsForPod(podSpec *models.PodSpec, podAn
 	envMutex.Unlock()
 
 	return env, nil
-}
-
-func (p *PodmanApplication) deployPodAndReadinessCheck(podSpec *models.PodSpec,
-	podTemplateName string, body io.Reader, opts map[string]string) error {
-	pods, err := p.runtime.CreatePod(body, opts)
-	if err != nil {
-		return fmt.Errorf("failed pod creation: %w", err)
-	}
-
-	logger.Infof("'%s': Successfully ran podman kube play\n", podTemplateName, logger.VerbosityLevelDebug)
-
-	// ---- Pod Readiness Checks ----
-	for _, pod := range pods {
-		pInfo, err := p.runtime.InspectPod(pod.ID)
-		if err != nil {
-			return fmt.Errorf("failed to do pod inspect for podID: '%s' with error: %w", pod.ID, err)
-		}
-
-		podName := pInfo.Name
-
-		logger.Infof("'%s', '%s': Starting Pod Readiness check...\n", podTemplateName, podName)
-
-		// Step1: ---- Containers Creation Check ----
-		if err := p.doContainersCreationCheck(podSpec, podTemplateName, pInfo.Name, pInfo.ID); err != nil {
-			return err
-		}
-
-		// Step2: ---- Containers Readiness Check ----
-		for _, container := range pInfo.Containers {
-			if err := p.doContainerReadinessCheck(podTemplateName, pInfo.Name, container.ID); err != nil {
-				return err
-			}
-			logger.Infoln("-------")
-		}
-		logger.Infof("'%s', '%s': Pod has been successfully deployed and ready!\n", podTemplateName, podName)
-		logger.Infoln("-------")
-	}
-
-	logger.Infoln("-------\n-------")
-
-	return nil
-}
-
-func (p *PodmanApplication) doContainersCreationCheck(podSpec *models.PodSpec, podTemplateName, podName, podID string) error {
-	logger.Infof("'%s', '%s': Performing Containers Creation check for pod...\n", podTemplateName, podName)
-
-	expectedContainerCount := len(specs.FetchContainerNames(*podSpec))
-
-	logger.Infof("'%s', '%s': Waiting for Containers Creation... Timeout set: %s\n", podTemplateName, podName, containerCreationTimeout)
-	// wait for all containers for a given pod are created
-	if err := helpers.WaitForContainersCreation(p.runtime, podID, expectedContainerCount, containerCreationTimeout); err != nil {
-		return fmt.Errorf("containers creation check failed for pod: '%s' with error: %w", podName, err)
-	}
-
-	logger.Infof("'%s', '%s': Containers creation check for pod is completed\n", podTemplateName, podName)
-
-	return nil
-}
-
-func (p *PodmanApplication) doContainerReadinessCheck(podTemplateName, podName, containerID string) error {
-	cInfo, err := p.runtime.InspectContainer(containerID)
-	if err != nil {
-		return fmt.Errorf("failed to do container inspect for containerID: '%s' with error: %w", containerID, err)
-	}
-
-	logger.Infof("'%s', '%s', '%s': Performing Container Readiness check...\n", podTemplateName, podName, cInfo.Name)
-
-	// getting the Start Period set for a container
-	startPeriod, err := helpers.FetchContainerStartPeriod(p.runtime, containerID)
-	if err != nil {
-		return fmt.Errorf("fetching container: '%s' start period failed: %w", cInfo.Name, err)
-	}
-
-	if startPeriod == -1 {
-		logger.Infof("No container health check is set for '%s'. Hence skipping readiness check\n", cInfo.Name, logger.VerbosityLevelDebug)
-
-		return nil
-	}
-
-	// configure readiness timeout by appending start period with additional extra timeout
-	readinessTimeout := startPeriod + extraContainerReadinessTimeout
-
-	logger.Infof("'%s', '%s', '%s': Waiting for Container Readiness... Timeout set: %s\n", podTemplateName, podName, cInfo.Name, readinessTimeout)
-
-	if err := helpers.WaitForContainerReadiness(p.runtime, containerID, readinessTimeout); err != nil {
-		return fmt.Errorf("readiness check failed for container: '%s'!: %w", cInfo.Name, err)
-	}
-	logger.Infof("'%s', '%s', '%s': Readiness Check for the container is completed!\n", podTemplateName, podName, cInfo.Name)
-
-	return nil
-}
-
-func (p *PodmanApplication) constructPodDeployOptions(podAnnotations map[string]string) map[string]string {
-	podStart := p.checkForPodStartAnnotation(podAnnotations)
-
-	// construct start option
-	podDeployOptions := map[string]string{}
-	if podStart != "" {
-		podDeployOptions["start"] = podStart
-	}
-
-	// construct publish option
-	hostPortMappings := p.fetchHostPortMappingFromAnnotation(podAnnotations)
-	podDeployOptions["publish"] = ""
-
-	// loop over each of the hostPortMappings to construct the 'publish' option
-	for containerPort, hostPort := range hostPortMappings {
-		if hostPort == "0" {
-			// if the host port is set to 0, then do not expose the particular containerPort
-			continue
-		}
-		if hostPort != "" {
-			// if the host port is present
-			podDeployOptions["publish"] += hostPort + ":" + containerPort
-		} else {
-			// else just populate the containerPort, so that dynamically podman will populate
-			podDeployOptions["publish"] += containerPort
-		}
-		podDeployOptions["publish"] += ","
-	}
-
-	return podDeployOptions
-}
-
-func (p *PodmanApplication) checkForPodStartAnnotation(podAnnotations map[string]string) string {
-	if val, ok := podAnnotations[constants.PodStartAnnotationkey]; ok {
-		if val == constants.PodStartOff || val == constants.PodStartOn {
-			return val
-		}
-	}
-
-	return ""
-}
-
-func (p *PodmanApplication) fetchHostPortMappingFromAnnotation(podAnnotations map[string]string) map[string]string {
-	// key -> containerPort and value -> hostPort
-	hostPortMapping := map[string]string{}
-
-	portMappings, ok := podAnnotations[constants.PodPortsAnnotationKey]
-	if !ok {
-		// return empty map if port annotation is not present
-		return hostPortMapping
-	}
-
-	portMapping := strings.SplitSeq(portMappings, ",")
-	for p := range portMapping {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-
-		// Find colon
-		i := strings.Index(p, ":")
-		if i == -1 {
-			// No colon → whole thing is the containerPort
-			hostPortMapping[p] = ""
-
-			continue
-		}
-
-		// Before colon string is hostPort
-		hostPort := strings.TrimSpace(p[:i])
-		// After colon string is containerPort
-		containerPort := strings.TrimSpace(p[i+1:])
-
-		// If colon exists but NO value after the colon (containerPort) → then skip
-		if containerPort == "" {
-			continue
-		}
-
-		hostPortMapping[containerPort] = hostPort
-	}
-
-	return hostPortMapping
 }

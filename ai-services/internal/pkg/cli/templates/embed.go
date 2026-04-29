@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -16,6 +15,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/models"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 
 	"go.yaml.in/yaml/v3"
 	"helm.sh/helm/v4/pkg/chart"
@@ -38,13 +38,52 @@ const (
 var ErrRuntimeNotSupported = errors.New("runtime not supported")
 
 type embedTemplateProvider struct {
-	fs      *embed.FS
-	root    string
-	runtime types.RuntimeType
+	fs   *embed.FS
+	root string
 }
 
-func (e *embedTemplateProvider) Runtime() string {
-	return e.runtime.String()
+// NewEmbedTemplateProvider creates a new template provider.
+// fs: The embed.FS to use (e.g., &assets.ApplicationFS, &assets.BootstrapFS, &assets.CatalogFS)
+// root: (optional) Custom root directory path within the embed.FS. If not provided, defaults are used based on the fs type.
+func NewEmbedTemplateProvider(fs *embed.FS, root ...string) Template {
+	var rootPath string
+
+	// Use custom root if provided
+	if len(root) == 1 {
+		rootPath = root[0]
+	} else if len(root) > 1 {
+		rootPath = strings.Join(root, "/")
+	} else {
+		// Determine default based on fs
+		switch fs {
+		case &assets.BootstrapFS:
+			rootPath = "bootstrap"
+		case &assets.CatalogFS:
+			rootPath = "catalog"
+		default:
+			rootPath = "applications"
+		}
+	}
+
+	return &embedTemplateProvider{
+		fs:   fs,
+		root: rootPath,
+	}
+}
+
+func getRuntime() string {
+	return vars.RuntimeFactory.GetRuntimeType().String()
+}
+
+// buildPath constructs a path handling empty root correctly.
+func (e *embedTemplateProvider) buildPath(parts ...string) string {
+	allParts := []string{}
+	if e.root != "" {
+		allParts = append(allParts, e.root)
+	}
+	allParts = append(allParts, parts...)
+
+	return strings.Join(allParts, "/")
 }
 
 // ListApplications lists all available application templates.
@@ -83,14 +122,25 @@ func (e *embedTemplateProvider) ListApplications(hidden bool) ([]string, error) 
 	return apps, nil
 }
 
+// AppTemplateExist Check if the application directory exists.
+func (e *embedTemplateProvider) AppTemplateExist(app string) error {
+	appPath := e.buildPath(app, "metadata.yaml")
+	_, err := fs.Stat(e.fs, appPath)
+	if err != nil {
+		return fmt.Errorf("application template '%s' does not exist", app)
+	}
+
+	return nil
+}
+
 // ListApplicationTemplateValues lists all available template value keys for a single application.
 func (e *embedTemplateProvider) ListApplicationTemplateValues(app string) (map[string]string, error) {
 	// Check if the runtime directory exists for this application
-	runtimePath := fmt.Sprintf("%s/%s/%s", e.root, app, e.Runtime())
+	runtimePath := e.buildPath(app, getRuntime())
 	_, err := fs.Stat(e.fs, runtimePath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("check runtime directory: %w: application %s does not support runtime %s", ErrRuntimeNotSupported, app, e.Runtime())
+			return nil, fmt.Errorf("check runtime directory: %w: application %s does not support runtime %s", ErrRuntimeNotSupported, app, getRuntime())
 		}
 
 		return nil, fmt.Errorf("check runtime directory: %w", err)
@@ -119,7 +169,7 @@ func (e *embedTemplateProvider) ListApplicationTemplateValues(app string) (map[s
 // LoadAllTemplates loads all templates for a given application.
 func (e *embedTemplateProvider) LoadAllTemplates(app string) (map[string]*template.Template, error) {
 	tmpls := make(map[string]*template.Template)
-	completePath := fmt.Sprintf("%s/%s/%s/templates", e.root, app, e.Runtime())
+	completePath := e.buildPath(app, getRuntime(), "templates")
 	err := fs.WalkDir(e.fs, completePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -144,7 +194,7 @@ func (e *embedTemplateProvider) LoadAllTemplates(app string) (map[string]*templa
 
 // LoadPodTemplate loads and renders a pod template with the given parameters.
 func (e *embedTemplateProvider) LoadPodTemplate(app, file string, params any) (*models.PodSpec, error) {
-	path := fmt.Sprintf("%s/%s/%s/templates/%s", e.root, app, e.Runtime(), file)
+	path := e.buildPath(app, getRuntime(), "templates", file)
 	data, err := e.fs.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read metadata: %w", err)
@@ -185,7 +235,7 @@ func (e *embedTemplateProvider) LoadPodTemplateWithValues(app, file, appName str
 
 func (e *embedTemplateProvider) LoadValues(app string, valuesFileOverrides []string, cliOverrides map[string]string) (map[string]interface{}, error) {
 	// Load the default values.yaml
-	valuesPath := fmt.Sprintf("%s/%s/%s/values.yaml", e.root, app, e.Runtime())
+	valuesPath := e.buildPath(app, getRuntime(), "values.yaml")
 	valuesData, err := e.fs.ReadFile(valuesPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read values.yaml: %w", err)
@@ -235,11 +285,12 @@ func (e *embedTemplateProvider) LoadValues(app string, valuesFileOverrides []str
 // if set it loads the runtime specific metadata.
 func (e *embedTemplateProvider) LoadMetadata(app string, isRuntime bool) (*AppMetadata, error) {
 	// construct metadata.yaml path
-	p := path.Join(e.root, app)
+	var p string
 	if isRuntime {
-		p = path.Join(p, e.Runtime())
+		p = e.buildPath(app, getRuntime(), "metadata.yaml")
+	} else {
+		p = e.buildPath(app, "metadata.yaml")
 	}
-	p = path.Join(p, "metadata.yaml")
 
 	data, err := e.fs.ReadFile(p)
 	if err != nil {
@@ -257,7 +308,7 @@ func (e *embedTemplateProvider) LoadMetadata(app string, isRuntime bool) (*AppMe
 // LoadMdFiles loads all md files for a given application.
 func (e *embedTemplateProvider) LoadMdFiles(app string) (map[string]*template.Template, error) {
 	tmpls := make(map[string]*template.Template)
-	completePath := fmt.Sprintf("%s/%s/%s/steps", e.root, app, e.Runtime())
+	completePath := e.buildPath(app, getRuntime(), "steps")
 	err := fs.WalkDir(e.fs, completePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -281,7 +332,7 @@ func (e *embedTemplateProvider) LoadMdFiles(app string) (map[string]*template.Te
 }
 
 func (e *embedTemplateProvider) LoadVarsFile(app string, params map[string]string) (*Vars, error) {
-	path := fmt.Sprintf("%s/%s/%s/steps/vars_file.yaml", e.root, app, e.Runtime())
+	path := e.buildPath(app, getRuntime(), "steps", "vars_file.yaml")
 
 	data, err := e.fs.ReadFile(path)
 	if err != nil {
@@ -310,12 +361,12 @@ func (e *embedTemplateProvider) LoadVarsFile(app string, params map[string]strin
 }
 
 func (e *embedTemplateProvider) LoadChart(app string) (chart.Charter, error) {
-	if e.Runtime() != string(types.RuntimeTypeOpenShift) {
+	if getRuntime() != string(types.RuntimeTypeOpenShift) {
 		return nil, errors.New("unsupported runtime type")
 	}
 
 	// construct chart path
-	chartPath := path.Join(e.root, app, e.Runtime())
+	chartPath := e.buildPath(app, getRuntime())
 
 	var files []*archive.BufferedFile
 	err := fs.WalkDir(e.fs, chartPath, func(p string, d fs.DirEntry, err error) error {
@@ -345,43 +396,18 @@ func (e *embedTemplateProvider) LoadChart(app string) (chart.Charter, error) {
 	return loader.LoadFiles(files)
 }
 
-type EmbedOptions struct {
-	FS      *embed.FS
-	Root    string
-	Runtime types.RuntimeType
-}
-
-// NewEmbedTemplateProvider creates a new instance of embedTemplateProvider.
-func NewEmbedTemplateProvider(options EmbedOptions) Template {
-	t := &embedTemplateProvider{}
-	if options.FS != nil {
-		t.fs = options.FS
-	} else {
-		t.fs = &assets.ApplicationFS
-	}
-
-	if options.Root != "" {
-		t.root = options.Root
-	} else {
-		t.root = "applications"
-	}
-
-	// Use Podman runtime if not set by default
-	t.runtime = types.RuntimeTypePodman
-	if options.Runtime != "" {
-		t.runtime = options.Runtime
-	}
-
-	return t
-}
-
-func (e *embedTemplateProvider) LoadYamls() ([][]byte, error) {
-	if e.Runtime() != string(types.RuntimeTypeOpenShift) {
+func (e *embedTemplateProvider) LoadYamls(folder string) ([][]byte, error) {
+	if getRuntime() != string(types.RuntimeTypeOpenShift) {
 		return nil, errors.New("unsupported runtime type")
 	}
 	var yamls [][]byte
 
-	err := fs.WalkDir(e.fs, e.root, func(p string, d fs.DirEntry, err error) error {
+	searchRoot := e.buildPath(getRuntime())
+	if folder != "" {
+		searchRoot = e.buildPath(getRuntime(), folder)
+	}
+
+	err := fs.WalkDir(e.fs, searchRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

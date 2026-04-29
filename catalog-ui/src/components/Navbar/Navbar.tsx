@@ -1,8 +1,13 @@
-import { Theme, SideNav, SideNavItems, SideNavMenuItem } from "@carbon/react";
+import {
+  Theme,
+  SideNav,
+  SideNavItems,
+  SideNavMenuItem,
+  SideNavDivider,
+} from "@carbon/react";
 import { NavLink } from "react-router-dom";
 import { useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import styles from "./Navbar.module.scss";
 
 type NavbarProps = {
   isSideNavOpen: boolean;
@@ -26,7 +31,7 @@ const Navbar = (props: NavbarProps) => {
   }, [isSideNavOpen, setIsSideNavOpen]);
 
   return (
-    <Theme theme="g100">
+    <Theme theme="g90">
       <SideNav
         aria-label="Side navigation"
         expanded={isSideNavOpen}
@@ -34,36 +39,22 @@ const Navbar = (props: NavbarProps) => {
         ref={navRef}
       >
         <SideNavItems>
-          <SideNavMenuItem
-            as={NavLink}
-            to="/applications"
-            className={styles.sideNavItem}
-          >
-            Applications
+          <SideNavMenuItem as={NavLink} to="/ai-deployments">
+            AI Deployments
           </SideNavMenuItem>
 
-          <SideNavMenuItem
-            as={NavLink}
-            to="/technical-templates"
-            className={styles.sideNavItem}
-          >
-            Technical templates
+          <SideNavMenuItem as={NavLink} to="/architectures">
+            Architectures
           </SideNavMenuItem>
 
-          <SideNavMenuItem
-            as={NavLink}
-            to="/business-demo-templates"
-            className={styles.sideNavItem}
-          >
-            Business demo templates
+          <SideNavMenuItem as={NavLink} to="/services">
+            Services
           </SideNavMenuItem>
 
-          <SideNavMenuItem
-            as={NavLink}
-            to="/services-catalog"
-            className={styles.sideNavItem}
-          >
-            Services catalog
+          <SideNavDivider />
+
+          <SideNavMenuItem as={NavLink} to="/solutions-and-use-cases">
+            Solutions and use cases
           </SideNavMenuItem>
         </SideNavItems>
       </SideNav>
