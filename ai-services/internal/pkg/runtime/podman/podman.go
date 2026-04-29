@@ -337,6 +337,7 @@ func (pc *PodmanClient) DeleteSecret(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to remove secret: %w", err)
 	}
+
 	return nil
 }
 
