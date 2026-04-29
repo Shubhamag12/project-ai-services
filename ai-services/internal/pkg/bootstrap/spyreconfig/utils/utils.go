@@ -20,6 +20,8 @@ import (
 const (
 	// FilePermissions defines the default file permissions (rw-r--r--).
 	FilePermissions = 0644
+	// DirPermissions is the default permission for creating directories.
+	DirPermissions = 0755
 )
 
 // ExecuteCommand executes a shell command and returns exit code, stdout, and stderr.
@@ -236,14 +238,9 @@ func ReloadUdevRules() error {
 		return fmt.Errorf("failed to reload udev rules: %w", err)
 	}
 
-	// Trigger for VFIO subsystem devices (/dev/vfio/0, 1, 2, 3, etc.)
-	if err := executeCommandOrFail("udevadm", "trigger", "--subsystem-match=vfio"); err != nil {
-		return fmt.Errorf("failed to trigger udev: %w", err)
-	}
-
-	// Trigger for the vfio kernel device (/dev/vfio/vfio)
-	if err := executeCommandOrFail("udevadm", "trigger", "--name-match=/dev/vfio/vfio"); err != nil {
-		return fmt.Errorf("failed to trigger vfio device: %w", err)
+	// Trigger for VFIO subsystem devices (/dev/vfio/0, 1, 2, 3, etc.) and the vfio kernel device (/dev/vfio/vfio)
+	if err := executeCommandOrFail("udevadm", "trigger", "--subsystem-match=vfio", "--name-match=/dev/vfio/vfio"); err != nil {
+		return fmt.Errorf("failed to trigger udev for vfio devices: %w", err)
 	}
 
 	if err := executeCommandOrFail("udevadm", "settle"); err != nil {

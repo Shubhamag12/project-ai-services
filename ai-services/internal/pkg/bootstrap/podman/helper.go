@@ -16,11 +16,6 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 )
 
-const (
-	// dirPermissions is the default permission for creating directories.
-	dirPermissions = 0755
-)
-
 // configureSpyre validates and repairs Spyre card configuration.
 func configureSpyre() error {
 	logger.Infoln("Running Spyre configuration validation and repair...", logger.VerbosityLevelDebug)
@@ -240,7 +235,7 @@ func fixPodmanServiceSupplementaryGroups() error {
 
 func createPodmanServiceDropIn() error {
 	dropInDir := "/etc/systemd/system/podman.service.d"
-	if err := os.MkdirAll(dropInDir, dirPermissions); err != nil {
+	if err := os.MkdirAll(dropInDir, utils.DirPermissions); err != nil {
 		return err
 	}
 

@@ -442,7 +442,7 @@ func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResu
 	limitsFile := fmt.Sprintf("%s/limits.conf", sliceDir)
 
 	// Create directory
-	if err := os.MkdirAll(sliceDir, dirPermissions); err != nil {
+	if err := os.MkdirAll(sliceDir, utils.DirPermissions); err != nil {
 		return RepairResult{
 			CheckName: checkName,
 			Status:    StatusFailedToFix,
@@ -501,15 +501,6 @@ func fixSELinuxVFIOPolicy(checkMap map[string]check.CheckResult) RepairResult {
 			CheckName: checkName,
 			Status:    StatusSkipped,
 			Message:   "SELinux is disabled",
-		}
-	}
-
-	// Check if VFIO devices exist
-	if !utils.FileExists("/dev/vfio") {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusSkipped,
-			Message:   "VFIO devices not found",
 		}
 	}
 
@@ -657,4 +648,5 @@ func applySELinuxLabels() error {
 
 	return nil
 }
+
 // Made with Bob
