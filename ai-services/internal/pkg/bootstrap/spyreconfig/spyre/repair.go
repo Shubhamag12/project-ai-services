@@ -59,6 +59,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	results = append(results, fixSystemdUserSliceLimits(checkMap))
 
 	results = append(results, fixSELinuxVFIOPolicy())
+
 	return results
 }
 
@@ -177,6 +178,21 @@ func fixMemlockConf(checkMap map[string]check.CheckResult) RepairResult {
 	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: msg}
 }
 
+// filterNofileLinesForSentient filters out old @sentient nofile configuration lines.
+func filterNofileLinesForSentient(lines []string) []string {
+	updatedLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that configure nofile for @sentient group
+		if strings.HasPrefix(trimmed, "@sentient") && strings.Contains(trimmed, "nofile") {
+			continue
+		}
+		updatedLines = append(updatedLines, line)
+	}
+
+	return updatedLines
+}
+
 // fixNofileConf repairs user nofile limit configuration.
 func fixNofileConf(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "User nofile limit configuration"
@@ -197,15 +213,7 @@ func fixNofileConf(checkMap map[string]check.CheckResult) RepairResult {
 	}
 
 	// Remove old @sentient nofile lines.
-	var updatedLines []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Skip lines that configure nofile for @sentient group
-		if strings.HasPrefix(trimmed, "@sentient") && strings.Contains(trimmed, "nofile") {
-			continue
-		}
-		updatedLines = append(updatedLines, line)
-	}
+	updatedLines := filterNofileLinesForSentient(lines)
 
 	// Add new configuration.
 	for key, attr := range confCheck.Attributes {
@@ -403,8 +411,45 @@ func fixVFIOPermissions(checkMap map[string]check.CheckResult, userGroupResult R
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
 }
 
+// reloadSystemdDaemon reloads the systemd daemon configuration.
+func reloadSystemdDaemon() error {
+	exitCode, _, stderr, err := utils.ExecuteCommand("systemctl", "daemon-reload")
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to reload systemd: %v, stderr: %s", err, stderr)
+	}
+
+	return nil
+}
+
+// getUserIDForSlice gets the user ID for the SUDO_USER.
+func getUserIDForSlice(sudoUser string) (string, error) {
+	exitCode, stdout, stderr, err := utils.ExecuteCommand("id", "-u", sudoUser)
+	if err != nil || exitCode != 0 {
+		return "", fmt.Errorf("failed to get user ID: %v, stderr: %s", err, stderr)
+	}
+
+	return strings.TrimSpace(stdout), nil
+}
+
+// writeSystemdSliceLimits writes the systemd slice limits configuration file.
+func writeSystemdSliceLimits(sliceDir, limitsFile string) error {
+	if err := os.MkdirAll(sliceDir, utils.DirPermissions); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", sliceDir, err)
+	}
+
+	limitsContent := `[Slice]
+LimitNOFILE=134217728
+LimitMEMLOCK=infinity
+`
+	if err := utils.WriteToFile(limitsFile, limitsContent); err != nil {
+		return fmt.Errorf("failed to write limits file: %w", err)
+	}
+
+	return nil
+}
+
 // fixSystemdUserSliceLimits configures systemd user slice limits for rootless podman.
-// This ensures that containers started by non-root users have proper ulimits
+// This ensures that containers started by non-root users have proper ulimits.
 func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResult {
 	checkName := "Systemd user slice limits configuration"
 	chk, ok := getCheckFromMap(checkMap, checkName)
@@ -412,72 +457,49 @@ func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResu
 		return RepairResult{CheckName: checkName, Status: StatusSkipped}
 	}
 
-	// Skip if check passed
 	if chk.GetStatus() {
 		return RepairResult{CheckName: checkName, Status: StatusSkipped}
 	}
 
-	// Get the SUDO_USER to configure their slice
 	sudoUser := os.Getenv("SUDO_USER")
 	if sudoUser == "" {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusNotFixable,
-			Message:   "Not running via sudo, cannot configure user slice",
-		}
+		return RepairResult{CheckName: checkName, Status: StatusNotFixable,
+			Message: "Not running via sudo, cannot configure user slice"}
 	}
 
-	// Get user ID
-	exitCode, stdout, stderr, err := utils.ExecuteCommand("id", "-u", sudoUser)
-	if err != nil || exitCode != 0 {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to get user ID: %v, stderr: %s", err, stderr),
-		}
+	userID, err := getUserIDForSlice(sudoUser)
+	if err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	userID := strings.TrimSpace(stdout)
 	sliceDir := fmt.Sprintf("/etc/systemd/system/user-%s.slice.d", userID)
 	limitsFile := fmt.Sprintf("%s/limits.conf", sliceDir)
 
-	// Create directory
-	if err := os.MkdirAll(sliceDir, utils.DirPermissions); err != nil {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to create directory %s: %w", sliceDir, err),
-		}
+	if err := writeSystemdSliceLimits(sliceDir, limitsFile); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	// Write limits configuration
-	limitsContent := `[Slice]
-LimitNOFILE=134217728
-LimitMEMLOCK=infinity
-`
-	if err := utils.WriteToFile(limitsFile, limitsContent); err != nil {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to write limits file: %w", err),
-		}
+	if err := reloadSystemdDaemon(); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	// Reload systemd daemon
-	exitCode, _, stderr, err = utils.ExecuteCommand("systemctl", "daemon-reload")
+	return RepairResult{CheckName: checkName, Status: StatusFixed,
+		Message: fmt.Sprintf("Configured systemd slice limits for user %s (UID: %s)", sudoUser, userID)}
+}
+
+// isSELinuxEnabledAndActive checks if SELinux is enabled and active.
+func isSELinuxEnabledAndActive() (bool, string) {
+	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
 	if err != nil || exitCode != 0 {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to reload systemd: %v, stderr: %s", err, stderr),
-		}
+		return false, "SELinux not available or not enabled"
 	}
 
-	return RepairResult{
-		CheckName: checkName,
-		Status:    StatusFixed,
-		Message:   fmt.Sprintf("Configured systemd slice limits for user %s (UID: %s)", sudoUser, userID),
+	status := strings.TrimSpace(stdout)
+	if status == "Disabled" {
+		return false, "SELinux is disabled"
 	}
+
+	return true, ""
 }
 
 // fixSELinuxVFIOPolicy configures SELinux policy for VFIO device access.
@@ -485,71 +507,42 @@ LimitMEMLOCK=infinity
 func fixSELinuxVFIOPolicy() RepairResult {
 	checkName := "SELinux VFIO policy configuration"
 
-	// Check if SELinux is enabled
-	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
-	if err != nil || exitCode != 0 {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusSkipped,
-			Message:   "SELinux not available or not enabled",
-		}
-	}
-
-	status := strings.TrimSpace(stdout)
-	if status == "Disabled" {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusSkipped,
-			Message:   "SELinux is disabled",
-		}
+	enabled, msg := isSELinuxEnabledAndActive()
+	if !enabled {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
 	}
 
 	// Check if policy is already installed
-	exitCode, stdout, _, err = utils.ExecuteCommand("semodule", "-l")
+	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
 	if err == nil && exitCode == 0 && strings.Contains(stdout, "vllm_vfio_policy") {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusSkipped,
-			Message:   "SELinux VFIO policy already installed",
-		}
+		return RepairResult{CheckName: checkName, Status: StatusSkipped,
+			Message: "SELinux VFIO policy already installed"}
 	}
 
-	// Create temporary directory for building the policy
 	tmpDir, err := os.MkdirTemp("", "selinux_build")
 	if err != nil {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to create temp directory: %w", err),
-		}
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix,
+			Error: fmt.Errorf("failed to create temp directory: %w", err)}
 	}
-	defer os.RemoveAll(tmpDir)
-
-	// Build and install the policy
-	if err := buildAndInstallSELinuxPolicy(tmpDir); err != nil {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     err,
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove temp directory %s: %v\n", tmpDir, err)
 		}
+	}()
+
+	if err := buildAndInstallSELinuxPolicy(tmpDir); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
 	// Reload udev rules to apply SELinux labels to existing devices.
 	// The udev rules include SECLABEL{selinux} directive which automatically
 	// labels devices on creation (including hotplug)
 	if err := utils.ReloadUdevRules(); err != nil {
-		return RepairResult{
-			CheckName: checkName,
-			Status:    StatusFailedToFix,
-			Error:     err,
-		}
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	return RepairResult{
-		CheckName: checkName,
-		Status:    StatusFixed,
-		Message:   "SELinux VFIO policy configured successfully",
-	}
+	return RepairResult{CheckName: checkName, Status: StatusFixed,
+		Message: "SELinux VFIO policy configured successfully"}
 }
 
 // buildAndInstallSELinuxPolicy builds and installs the SELinux policy module.

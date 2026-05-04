@@ -65,8 +65,12 @@ func DownloadModel(model, targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("user does not have write permission to directory: %s, err: %w", targetDir, err)
 	}
-	f.Close()
-	os.Remove(testFile)
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("failed to close test file: %w", err)
+	}
+	if err := os.Remove(testFile); err != nil {
+		return fmt.Errorf("failed to remove test file: %w", err)
+	}
 
 	logger.Infof("Downloading model %s to %s\n", model, targetDir)
 
@@ -82,13 +86,7 @@ func DownloadModel(model, targetDir string) error {
 	stdin := true
 	s.Terminal = &terminal
 	s.Stdin = &stdin
-	s.Command = []string{
-		"hf",
-		"download",
-		model,
-		"--local-dir",
-		fmt.Sprintf("/models/%s", model),
-	}
+	s.Command = []string{"hf", "download", model, "--local-dir", fmt.Sprintf("/models/%s", model)}
 	rm := true
 	s.Remove = &rm
 

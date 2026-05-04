@@ -20,7 +20,7 @@ const (
 func (p *PodmanBootstrap) Configure() error {
 	euid := os.Geteuid()
 	if euid != 0 {
-		return fmt.Errorf("podman bootstrap requires root privileges, either run as root or use sudo.")
+		return fmt.Errorf("podman bootstrap requires root privileges, either run as root or use sudo")
 	}
 
 	ctx := context.Background()

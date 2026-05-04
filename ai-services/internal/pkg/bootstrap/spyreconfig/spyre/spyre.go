@@ -208,6 +208,7 @@ func checkUdevRule() *check.ConfigurationFileCheck {
 			confCheck.AddAttribute(rule, false, "", "")
 		}
 		confCheck.SetStatus(false)
+
 		return confCheck
 	}
 
@@ -345,6 +346,7 @@ func isNofileLimitConfigValid(configFile, expectedConf string) bool {
 	lines, err := utils.ReadFileLines(configFile)
 	if err != nil {
 		log.Printf("Error reading %s: %v", configFile, err)
+
 		return false
 	}
 
@@ -585,6 +587,7 @@ func isSentientGroupPresent(value string) bool {
 
 	// Check if it's in a space-separated list of groups
 	groups := strings.Fields(value)
+
 	return slices.Contains(groups, sentientGroup)
 }
 
@@ -597,6 +600,7 @@ func checkSELinuxVFIOPolicy() *check.Check {
 	if err != nil || exitCode != 0 {
 		// SELinux not available - skip check (pass)
 		selinuxCheck.SetStatus(true)
+
 		return selinuxCheck
 	}
 
@@ -604,6 +608,7 @@ func checkSELinuxVFIOPolicy() *check.Check {
 	if status == "Disabled" {
 		// SELinux disabled - skip check (pass)
 		selinuxCheck.SetStatus(true)
+
 		return selinuxCheck
 	}
 
@@ -611,6 +616,7 @@ func checkSELinuxVFIOPolicy() *check.Check {
 	if !utils.FileExists("/dev/vfio") {
 		// No VFIO devices - skip check (pass)
 		selinuxCheck.SetStatus(true)
+
 		return selinuxCheck
 	}
 
@@ -622,10 +628,12 @@ func checkSELinuxVFIOPolicy() *check.Check {
 		// This is expected when running without sudo - skip check (pass)
 		if strings.Contains(stderr, "Permission denied") || strings.Contains(stderr, "access") {
 			selinuxCheck.SetStatus(true)
+
 			return selinuxCheck
 		}
 		// Other errors mean policy is not installed
 		selinuxCheck.SetStatus(false)
+
 		return selinuxCheck
 	}
 
@@ -659,6 +667,7 @@ func checkSystemdUserSliceLimits() *check.ConfigurationFileCheck {
 	if sudoUser == "" {
 		// Not running via sudo, skip this check
 		confCheck.SetStatus(true)
+
 		return confCheck
 	}
 
@@ -667,6 +676,7 @@ func checkSystemdUserSliceLimits() *check.ConfigurationFileCheck {
 	if err != nil || exitCode != 0 {
 		log.Printf("Failed to get user ID for %s: %v, stderr: %s", sudoUser, err, stderr)
 		confCheck.SetStatus(false)
+
 		return confCheck
 	}
 
@@ -679,6 +689,7 @@ func checkSystemdUserSliceLimits() *check.ConfigurationFileCheck {
 		confCheck.AddAttribute("LimitNOFILE=134217728", false, "not found", "134217728")
 		confCheck.AddAttribute("LimitMEMLOCK=infinity", false, "not found", "infinity")
 		confCheck.SetStatus(false)
+
 		return confCheck
 	}
 
@@ -687,6 +698,7 @@ func checkSystemdUserSliceLimits() *check.ConfigurationFileCheck {
 	if err != nil {
 		log.Printf("Failed to read %s: %v", limitsFile, err)
 		confCheck.SetStatus(false)
+
 		return confCheck
 	}
 
