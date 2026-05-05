@@ -213,7 +213,7 @@ func (pc *PodmanClient) streamContainerLogs(ctx context.Context, containerNameOr
 		waitDone := make(chan struct{})
 		go func() {
 			defer close(waitDone)
-			_, err := containers.Wait(pc.Context, containerNameOrID, nil)
+			_, err := containers.Wait(ctx, containerNameOrID, nil)
 			if err == nil {
 				// Container exited, cancel the logs streaming
 				cancelLogs()
@@ -227,8 +227,7 @@ func (pc *PodmanClient) streamContainerLogs(ctx context.Context, containerNameOr
 		<-waitDone
 	}()
 
-	// Print logs as they arrive
-	pc.printLogsFromChannels(logsCtx, stdoutChan, stderrChan)
+	pc.printLogsFromChannels(ctx, logsCtx, stdoutChan, stderrChan)
 
 	// Wait for goroutine to complete
 	<-done
@@ -237,10 +236,14 @@ func (pc *PodmanClient) streamContainerLogs(ctx context.Context, containerNameOr
 }
 
 // printLogsFromChannels reads from stdout and stderr channels and prints logs.
-func (pc *PodmanClient) printLogsFromChannels(ctx context.Context, stdoutChan, stderrChan <-chan string) {
+func (pc *PodmanClient) printLogsFromChannels(parentCtx, logsCtx context.Context, stdoutChan, stderrChan <-chan string) {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-parentCtx.Done():
+			// Parent context cancelled (e.g., Ctrl+C)
+			return
+		case <-logsCtx.Done():
+			// Logs context cancelled (e.g., container exited)
 			return
 		case line, ok := <-stdoutChan:
 			if !ok {
