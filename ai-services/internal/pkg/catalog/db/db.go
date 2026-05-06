@@ -50,11 +50,9 @@ func (c *Config) ConnectionString() string {
 
 // ConnectionURL builds a PostgreSQL connection URL from the config (for pgxpool).
 func (c *Config) ConnectionURL() string {
-	encodedPassword := url.QueryEscape(c.Password)
-
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		c.User, encodedPassword, c.Host, c.Port, c.DBName, c.SSLMode,
+		c.User, url.QueryEscape(c.Password), c.Host, c.Port, c.DBName, c.SSLMode,
 	)
 }
 
