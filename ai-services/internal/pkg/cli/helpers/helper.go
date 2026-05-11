@@ -172,6 +172,7 @@ func CheckExistingResourcesForApplication(runtime runtime.Runtime, appName strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing pods: %w", err)
 	}
+
 	// check existing secrets for the application
 	secretsToSkip, err := existingSecrets(runtime, secretNames)
 	if err != nil {
@@ -214,7 +215,7 @@ func existingSecrets(runtime runtime.Runtime, secretNames []string) ([]string, e
 		secret, err := runtime.ListSecrets(map[string][]string{
 			"name": {secretName},
 		})
-		if err != nil && strings.Contains(err.Error(), constants.ErrSecretNotFound) {
+		if err != nil && !strings.Contains(err.Error(), constants.ErrSecretNotFound) {
 			return nil, fmt.Errorf("failed to list secrets: %w", err)
 		}
 		if len(secret) != 0 {

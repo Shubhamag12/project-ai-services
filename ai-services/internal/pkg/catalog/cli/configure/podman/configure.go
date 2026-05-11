@@ -214,17 +214,9 @@ func executePodTemplate(rt *podman.PodmanClient, tp templates.Template, tmpls ma
 		"env":             map[string]map[string]string{},
 	}
 
-	// filter out pods
+	// filter out resources
 	if slices.Contains(existingResources, podSpec.Name) {
-		logger.Infof("%s: Skipping pod deploy as '%s' it already exists", podTemplateName, podSpec.Name)
-
-		return nil
-	}
-
-	// filter out secrets
-	secretName := extractSecretName(podTemplateName)
-	if slices.Contains(existingResources, secretName) {
-		logger.Infof("%s: Skipping pod deploy as '%s' it already exists", podTemplateName, secretName)
+		logger.Infof("%s: Skipping resource deploy as '%s' it already exists", podTemplateName, podSpec.Name)
 
 		return nil
 	}
@@ -247,15 +239,6 @@ func executePodTemplate(rt *podman.PodmanClient, tp templates.Template, tmpls ma
 	}
 
 	return nil
-}
-
-func extractSecretName(podTemplateName string) string {
-	secretMap := map[string]string{
-		"catalog-secret.yaml.tmpl":    constants.CatalogSecretName,
-		"catalog-db-secret.yaml.tmpl": constants.CatalogDBSecretName,
-	}
-
-	return secretMap[podTemplateName]
 }
 
 // Made with Bob
