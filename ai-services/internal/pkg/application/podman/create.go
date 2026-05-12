@@ -46,23 +46,23 @@ func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions
 	}
 
 	// load metadata.yml to read the app metadata
-	appMetadata, err := tp.LoadMetadata(opts.TemplateName, true)
-	if err != nil {
+	var appMetadata templates.AppMetadata
+	if err := tp.LoadMetadata(opts.TemplateName, true, &appMetadata); err != nil {
 		return fmt.Errorf("failed to read the app metadata: %w", err)
 	}
 
-	if err := p.verifyPodTemplateExists(tmpls, appMetadata); err != nil {
+	if err := p.verifyPodTemplateExists(tmpls, &appMetadata); err != nil {
 		return fmt.Errorf("failed to verify pod template: %w", err)
 	}
 
-	// Check if pods already exists with the given application name
-	existingPods, err := helpers.CheckExistingPodsForApplication(p.runtime, opts.Name)
+	// Check if resources already exists with the given application name
+	existingResources, err := helpers.CheckExistingResourcesForApplication(p.runtime, opts.Name, nil)
 	if err != nil {
 		return fmt.Errorf("failed while checking existing pods for application: %w", err)
 	}
 
 	// if all the pods for given application are already deployed, just log and do not proceed further
-	if len(existingPods) == len(tmpls) {
+	if len(existingResources) == len(tmpls) {
 		logger.Infof("Pods for given app: %s are already deployed. Please use 'ai-services application ps %s' to see the pods deployed\n", opts.Name, opts.Name)
 
 		return nil
@@ -81,7 +81,7 @@ func (p *PodmanApplication) Create(ctx context.Context, opts types.CreateOptions
 	// Loop through all pod templates, render and run kube play
 	logger.Infof("Total Pod Templates to be processed: %d\n", len(tmpls))
 
-	return p.deployApplication(ctx, opts, tmpls, appMetadata, pciAddresses)
+	return p.deployApplication(ctx, opts, tmpls, &appMetadata, pciAddresses, existingResources)
 }
 
 func (p *PodmanApplication) validateAndAllocateSpyreCards(templateName, appName string, tmpls map[string]*template.Template) ([]string, error) {
@@ -128,21 +128,17 @@ func (p *PodmanApplication) prepareApplicationArtifacts(ctx context.Context, opt
 	return nil
 }
 
-func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.CreateOptions, tmpls map[string]*template.Template, appMetadata *templates.AppMetadata, pciAddresses []string) error {
+func (p *PodmanApplication) deployApplication(ctx context.Context, opts types.CreateOptions, tmpls map[string]*template.Template,
+	appMetadata *templates.AppMetadata, pciAddresses []string, existingResources []string) error {
 	logger.Infof("Total Pod Templates to be processed: %d\n", len(tmpls))
 
 	s := spinner.New("Deploying application '" + opts.Name + "'...")
 	s.Start(ctx)
 
-	existingPods, err := helpers.CheckExistingPodsForApplication(p.runtime, opts.Name)
-	if err != nil {
-		return fmt.Errorf("failed while checking existing pods for application: %w", err)
-	}
-
 	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 
 	// execute the pod Templates
-	if err := p.executePodTemplates(tp, opts.Name, appMetadata, tmpls, pciAddresses, existingPods, opts.ValuesFiles, opts.ArgParams); err != nil {
+	if err := p.executePodTemplates(tp, opts.Name, appMetadata, tmpls, pciAddresses, existingResources, opts.ValuesFiles, opts.ArgParams); err != nil {
 		return err
 	}
 
@@ -177,7 +173,7 @@ func (p *PodmanApplication) downloadModels(ctx context.Context, templateName, ap
 	for _, model := range models {
 		s.UpdateMessage("Downloading model: " + model + "...")
 		err = utils.Retry(vars.RetryCount, vars.RetryInterval, nil, func() error {
-			return helpers.DownloadModel(model, vars.ModelDirectory)
+			return helpers.DownloadModel(model, utils.GetModelsPath())
 		})
 		if err != nil {
 			s.Fail("failed to download model: " + model)
@@ -314,6 +310,7 @@ func (p *PodmanApplication) executePodTemplates(tp templates.Template,
 		"AppName":         appName,
 		"AppTemplateName": appMetadata.Name,
 		"Version":         appMetadata.Version,
+		"BaseDir":         utils.GetBaseDir(),
 		"Values":          values,
 		// Key -> container name
 		// Value -> range of key-value env pairs

@@ -6,14 +6,23 @@ const (
 	AIServices           = "ai-services"
 	PodStartOn           = "on"
 	PodStartOff          = "off"
-	ApplicationsPath     = "/var/lib/ai-services/applications"
 	OperatorPollInterval = 5 * time.Second
 	OperatorPollTimeout  = 3 * time.Minute
 	VersionV2            = "v2"
 	DSCKind              = "DataScienceCluster"
 	DSCIKind             = "DSCInitialization"
 	SMTLevel             = 2
+	ErrSecretNotFound    = "no secret with name or id"
 )
+
+const (
+	DirPerm  = 0755
+	FilePerm = 0644
+)
+
+// DefaultBaseDir is the single source of truth for the default base directory.
+// Change this constant to update the default directory everywhere in the application.
+const DefaultBaseDir = "/var/lib/ai-services"
 
 // OperatorConfig defines configuration for an operator.
 type OperatorConfig struct {
