@@ -11,7 +11,6 @@ import (
 	"text/template"
 
 	"github.com/project-ai-services/ai-services/assets"
-	"github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	clipodman "github.com/project-ai-services/ai-services/internal/pkg/cli/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
@@ -25,6 +24,7 @@ import (
 const (
 	catalogAppName     = "ai-services"
 	catalogAppTemplate = "catalog"
+	kindSecret         = "Secret"
 )
 
 // DeployCatalog deploys the catalog service using the assets/catalog template for podman runtime.
@@ -48,8 +48,14 @@ func DeployCatalog(ctx context.Context, podmanURI, passwordHash, baseDir string,
 		return fmt.Errorf("failed to load catalog templates: %w", err)
 	}
 
-	// Check if catalog resources already exists
-	catalogSecrets := []string{constants.CatalogDBSecretName, constants.CatalogSecretName}
+	// collect all secret names used as part of deployment
+	catalogSecrets, err := collectSecretNames(tp, tmpls, argParams)
+	if err != nil {
+		s.Fail("failed to collect catalog secret names")
+
+		return fmt.Errorf("failed to collect catalog secret names: %w", err)
+	}
+
 	existingResources, err := helpers.CheckExistingResourcesForApplication(rt, catalogAppName, catalogSecrets)
 	if err != nil {
 		s.Fail("failed to check existing pods")
@@ -239,6 +245,23 @@ func executePodTemplate(rt *podman.PodmanClient, tp templates.Template, tmpls ma
 	}
 
 	return nil
+}
+
+func collectSecretNames(tp templates.Template, tmpls map[string]*template.Template, argParams map[string]string) ([]string, error) {
+	secretNames := make([]string, 0)
+
+	for podTemplateName := range tmpls {
+		podSpec, err := tp.LoadPodTemplateWithValues(catalogAppTemplate, podTemplateName, catalogAppName, nil, argParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load pod template %s: %w", podTemplateName, err)
+		}
+
+		if podSpec.Kind == kindSecret {
+			secretNames = append(secretNames, podSpec.Name)
+		}
+	}
+
+	return secretNames, nil
 }
 
 // Made with Bob
