@@ -10,6 +10,7 @@ import (
 	catalogPodman "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -42,7 +43,10 @@ func Run(opts ConfigureOptions) error {
 	switch opts.Runtime {
 	case types.RuntimeTypePodman:
 		// Determine Podman URI
-		podmanURI := getPodmanURI()
+		podmanURI, err := utils.ResolvePodmanURI()
+		if err != nil {
+			return fmt.Errorf("failed to generate podman uri: %w", err)
+		}
 
 		return catalogPodman.DeployCatalog(ctx, podmanURI, passwordHashBase64, opts.BaseDir, opts.ArgParams)
 
@@ -52,13 +56,6 @@ func Run(opts ConfigureOptions) error {
 	default:
 		return fmt.Errorf("unsupported runtime type: %s", opts.Runtime)
 	}
-}
-
-// getPodmanURI determines the Podman socket URI.
-func getPodmanURI() string {
-	// TODO: Need to take care for getting rootless socket
-	// Return default local Unix socket
-	return "/run/podman/podman.sock"
 }
 
 // hashPasswordPBKDF2 generates a PBKDF2 hash of the password with a random salt.
