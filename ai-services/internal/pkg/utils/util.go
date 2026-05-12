@@ -427,17 +427,17 @@ func ResolvePodmanURI() (string, error) {
 	}
 
 	if os.Geteuid() == 0 {
-		return GetPodmanURIAsRoot()
+		return getPodmanURIAsRoot()
 	}
 
 	return fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()), nil
 }
 
-// GetPodmanURIAsRoot determines the appropriate Podman socket URI when running with root privileges.
+// getPodmanURIAsRoot determines the appropriate Podman socket URI when running with root privileges.
 // If the process was elevated via sudo (SUDO_USER is set), it returns the socket path
 // for the original user's rootless Podman instance to maintain user context.
 // Otherwise, it returns the system-wide root Podman socket path.
-func GetPodmanURIAsRoot() (string, error) {
+func getPodmanURIAsRoot() (string, error) {
 	sudoUser := os.Getenv("SUDO_USER")
 	if sudoUser == "" {
 		return "unix:///run/podman/podman.sock", nil

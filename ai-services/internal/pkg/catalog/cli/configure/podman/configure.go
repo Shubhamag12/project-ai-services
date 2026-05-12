@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"text/template"
 
@@ -133,10 +134,14 @@ func prepareCatalogValues(tp templates.Template, podmanURI, passwordHash string,
 	// Base64 encode the database password for Kubernetes secret
 	dbPasswordBase64 := base64.StdEncoding.EncodeToString([]byte(dbPassword))
 
+	// Strip unix:// prefix from podmanURI for hostPath volume mount
+	// The CONTAINER_HOST env var needs the full URI, but the hostPath needs just the file path
+	podmanSocketPath := strings.TrimPrefix(podmanURI, "unix://")
+
 	// Set configure-specific values
 	argParams["backend.adminPasswordHash"] = passwordHash
 	argParams["backend.runtime"] = "podman"
-	argParams["backend.podman.uri"] = podmanURI
+	argParams["backend.podman.uri"] = podmanSocketPath
 	argParams["db.password"] = dbPasswordBase64
 
 	// Load values from catalog
