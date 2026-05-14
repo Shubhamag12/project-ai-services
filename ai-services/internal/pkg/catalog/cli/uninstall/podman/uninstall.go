@@ -86,20 +86,27 @@ func confirmDeletion(pods []types.Pod) (bool, error) {
 func performCleanup(rt *podman.PodmanClient, pods []types.Pod, skipCleanup bool) error {
 	logger.Infoln("Proceeding with deletion...")
 
+	secretsToDelete, secretsToSkip := fetchSecretsToDelete(pods)
+
 	// Delete catalog pods
 	if err := podsDeletion(rt, pods); err != nil {
 		return err
 	}
 
-	// Delete catalog secret
-	if err := rt.DeleteSecret(catalogConstants.CatalogSecretName); err != nil {
-		return err
+	// Delete catalog secrets
+	for _, secret := range secretsToDelete {
+		if err := rt.DeleteSecret(secret); err != nil {
+			return err
+		}
 	}
 
 	// Delete database data and secrets
 	if !skipCleanup {
-		if err := rt.DeleteSecret(catalogConstants.CatalogDBSecretName); err != nil {
-			return err
+		// Delete catalog secrets
+		for _, secret := range secretsToSkip {
+			if err := rt.DeleteSecret(secret); err != nil {
+				return err
+			}
 		}
 		if err := dbDataDeletion(); err != nil {
 			return err
@@ -135,6 +142,24 @@ func podsDeletion(rt *podman.PodmanClient, pods []types.Pod) error {
 	}
 
 	return nil
+}
+
+// fetchSecretsToDelete fetches the secrets to delete and secrets which are to be deleted when --skip-cleanup is not set.
+func fetchSecretsToDelete(pods []types.Pod) ([]string, []string) {
+	var secretsToDelete, secretsToSkip []string
+	for _, pod := range pods {
+		// fetch secret name from pod labels
+		if secretName, ok := pod.Labels[catalogConstants.CatalogSecretLabel]; ok {
+			// check if it has skip-cleanup label
+			if _, ok := pod.Labels[catalogConstants.CatalogSecretSkipLabel]; ok {
+				secretsToSkip = append(secretsToSkip, secretName)
+			} else {
+				secretsToDelete = append(secretsToDelete, secretName)
+			}
+		}
+	}
+
+	return secretsToDelete, secretsToSkip
 }
 
 // dbDataDeletion removes the database data directory.
