@@ -20,7 +20,7 @@ definitions:
     type: object
   github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationRequest:
     properties:
-      architecture:
+      catalogid:
         type: string
       name:
         maxLength: 100
@@ -31,7 +31,7 @@ definitions:
           $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Service'
         type: array
     required:
-    - architecture
+    - catalogid
     - name
     - services
     type: object
@@ -50,8 +50,6 @@ definitions:
         items:
           $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Component'
         type: array
-      enabled:
-        type: boolean
       service_id:
         type: string
       type:

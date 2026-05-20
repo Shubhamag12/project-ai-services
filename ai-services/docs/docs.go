@@ -1007,12 +1007,12 @@ const docTemplate = `{
         "github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.CreateApplicationRequest": {
             "type": "object",
             "required": [
-                "architecture",
+                "catalogid",
                 "name",
                 "services"
             ],
             "properties": {
-                "architecture": {
+                "catalogid": {
                     "type": "string"
                 },
                 "name": {
@@ -1055,9 +1055,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Component"
                     }
-                },
-                "enabled": {
-                    "type": "boolean"
                 },
                 "service_id": {
                     "type": "string"
