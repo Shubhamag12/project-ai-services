@@ -26,7 +26,7 @@ ARG DNF_FLAGS="--disablerepo=* --enablerepo=ubi-9-baseos-rpms --enablerepo=ubi-9
 RUN set -eux; \
 	groupadd -r postgres --gid=26; \
 	useradd -r -g postgres --uid=26 --home-dir=/var/lib/pgsql --shell=/bin/bash postgres; \
-	install --verbose --directory --owner postgres --group postgres --mode 1777 /var/lib/pgsql
+	install --verbose --directory --owner postgres --group 0 --mode 0775 /var/lib/pgsql
 
 # Install required packages
 RUN set -ex; \
@@ -94,7 +94,7 @@ RUN set -eux; \
 	sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/pgsql-$PG_MAJOR/share/postgresql.conf.sample; \
 	grep -F "listen_addresses = '*'" /usr/pgsql-$PG_MAJOR/share/postgresql.conf.sample
 
-RUN install --verbose --directory --owner postgres --group postgres --mode 3777 /var/run/postgresql
+RUN install --verbose --directory --owner postgres --group 0 --mode 0775 /var/run/postgresql
 
 #
 # NOTE: in 18+, PGDATA has changed to match the pg_ctlcluster standard directory structure, and the VOLUME has moved from /var/lib/postgresql/data to /var/lib/postgresql
