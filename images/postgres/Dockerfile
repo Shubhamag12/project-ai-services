@@ -24,8 +24,8 @@ ARG DNF_FLAGS="--disablerepo=* --enablerepo=ubi-9-baseos-rpms --enablerepo=ubi-9
 
 # explicitly set user/group IDs
 RUN set -eux; \
-	groupadd -r postgres --gid=26; \
-	useradd -r -g postgres --uid=26 --home-dir=/var/lib/pgsql --shell=/bin/bash postgres; \
+	groupadd -r postgres --gid=0; \
+	useradd -r -g 0 --uid=26 --home-dir=/var/lib/pgsql --shell=/bin/bash postgres; \
 	install --verbose --directory --owner postgres --group 0 --mode 0775 /var/lib/pgsql
 
 # Install required packages
