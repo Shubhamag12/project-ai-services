@@ -162,33 +162,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/applications/templates": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a list of available application templates",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Applications"
-                ],
-                "summary": "List application templates",
-                "responses": {
-                    "200": {
-                        "description": "List of templates",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/applications/{name}": {
+        "/applications/{id}": {
             "get": {
                 "security": [
                     {
@@ -206,8 +180,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Application name",
-                        "name": "name",
+                        "description": "Application ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -215,6 +189,49 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "Application details",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Application not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing application's configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Applications"
+                ],
+                "summary": "Update application",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Application ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Application updated",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -243,8 +260,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Application name",
-                        "name": "name",
+                        "description": "Application ID",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     }
@@ -252,180 +269,6 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "Application deleted",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Application not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/applications/{name}/logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get logs from a specific application",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Applications"
-                ],
-                "summary": "Get application logs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Application name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Application logs",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Application not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/applications/{name}/ps": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get the running status and health of an application",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Applications"
-                ],
-                "summary": "Get application status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Application name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Application status",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Application not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/applications/{name}/start": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Start a stopped application",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Applications"
-                ],
-                "summary": "Start application",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Application name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Application started",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Application not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/applications/{name}/stop": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Stop a running application",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Applications"
-                ],
-                "summary": "Stop application",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Application name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Application stopped",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -545,7 +388,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Deploy Options"
+                    "Catalog"
                 ],
                 "summary": "Get architecture deploy options",
                 "parameters": [
@@ -778,7 +621,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Deploy Options"
+                    "Catalog"
                 ],
                 "summary": "Get component provider parameters",
                 "parameters": [
@@ -936,7 +779,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Deploy Options"
+                    "Catalog"
                 ],
                 "summary": "Get service deploy options",
                 "parameters": [
