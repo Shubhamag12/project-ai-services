@@ -202,6 +202,16 @@ func (h *ApplicationHandler) CreateApplication(c *gin.Context) {
 	// Call service layer to create application
 	response, err := h.appService.CreateApplication(c.Request.Context(), req)
 	if err != nil {
+		// Check if it's a validation error with specific status code
+		if valErr, ok := err.(*repository.ValidationError); ok {
+			c.JSON(valErr.Code, ErrorResponse{
+				Error: valErr.Message,
+			})
+
+			return
+		}
+
+		// Default to internal server error
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: fmt.Sprintf("Failed to create application: %v", err),
 		})

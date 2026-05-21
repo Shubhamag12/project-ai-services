@@ -19,6 +19,7 @@ import (
 	dbrepo "github.com/project-ai-services/ai-services/internal/pkg/catalog/db/repository"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/validators"
 	clitemplates "github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
 	consts "github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
@@ -43,7 +44,11 @@ type ApplicationService struct {
 	deploymentPlanner     *deployment.DeploymentPlanner
 	deploymentExecutor    *deployment.DeploymentExecutor
 	deletionService       *deletion.DeletionService
+	validator             *validators.ApplicationValidator
 }
+
+// ValidationError represents a validation error with HTTP status code.
+type ValidationError = validators.ValidationError
 
 // NewApplicationService creates a new application service.
 func NewApplicationService(
@@ -62,6 +67,7 @@ func NewApplicationService(
 		deploymentPlanner:     deployment.NewDeploymentPlanner(provider, componentRepo),
 		deploymentExecutor:    deployment.NewDeploymentExecutor(provider, appRepo, serviceRepo, componentRepo),
 		deletionService:       deletion.NewDeletionService(appRepo, serviceRepo, componentRepo, serviceDependencyRepo),
+		validator:             validators.NewApplicationValidator(provider),
 	}
 }
 
@@ -262,22 +268,27 @@ func (s *ApplicationService) CreateApplication(ctx context.Context, req apimodel
 		return nil, fmt.Errorf("application with name '%s' already exists", req.Name)
 	}
 
-	// Phase 2: Create deployment plan (synchronous - fail fast if invalid)
+	// Phase 2: Validate request payload
+	if err := s.validator.ValidateDeploymentRequest(req); err != nil {
+		return nil, err
+	}
+
+	// Phase 3: Create deployment plan (synchronous - fail fast if invalid)
 	// Use podman as default runtime type for planning
 	plan, err := s.deploymentPlanner.PlanDeployment(ctx, req, runtimeTypes.RuntimeTypePodman.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create deployment plan: %w", err)
 	}
 
-	// Phase 3: Insert database records for application, services, components, and dependencies
+	// Phase 4: Insert database records for application, services, components, and dependencies
 	if err := s.insertDeploymentRecords(ctx, plan, req.CreatedBy); err != nil {
 		return nil, fmt.Errorf("failed to insert deployment records: %w", err)
 	}
 
-	// Phase 4: Spawn goroutine for async deployment execution with panic recovery
+	// Phase 5: Spawn goroutine for async deployment execution with panic recovery
 	go s.executeDeploymentAsync(plan, req)
 
-	// Phase 5: Return 202 Accepted immediately with application ID
+	// Phase 6: Return 202 Accepted immediately with application ID
 	response := &apimodels.CreateApplicationResponse{
 		ID: plan.ApplicationID.String(),
 	}

@@ -1672,6 +1672,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "standalone": {
+                    "type": "boolean"
+                },
                 "type": {
                     "description": "\"service\"",
                     "type": "string"

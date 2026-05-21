@@ -64,6 +64,7 @@ type Service struct {
 	CertifiedBy   string                `yaml:"certified_by" json:"certified_by"`
 	Architectures []string              `yaml:"architectures" json:"architectures"`
 	Dependencies  []DependencyReference `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	Standalone    bool                  `yaml:"standalone,omitempty" json:"standalone,omitempty"`
 }
 
 // ServiceSummary represents a service for list API responses.

@@ -3,8 +3,6 @@ package deployment
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -15,6 +13,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/apiserver/services/deployment/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/apiserver/services/params"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/db/repository"
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	podmodels "github.com/project-ai-services/ai-services/internal/pkg/models"
@@ -160,7 +159,7 @@ func (p *DeploymentPlanner) processComponent(
 ) (string, error) {
 	// Calculate component hash based on type + provider + params
 	// This allows deduplication: same config = same deployment
-	componentHash := p.calculateComponentHash(
+	componentHash := utils.CalculateComponentHash(
 		comp.ComponentType,
 		comp.ProviderID,
 		comp.Params,
@@ -196,26 +195,6 @@ func (p *DeploymentPlanner) processComponent(
 	plan.Components[componentHash] = compPlan
 
 	return componentHash, nil
-}
-
-// calculateComponentHash creates a unique hash for a component configuration.
-// Components with same type, provider, and params will have the same hash.
-func (p *DeploymentPlanner) calculateComponentHash(
-	componentType string,
-	providerID string,
-	params map[string]any,
-) string {
-	// Create a deterministic string representation
-	hashInput := fmt.Sprintf("%s:%s:", componentType, providerID)
-
-	// Sort and add params to ensure consistent hashing
-	paramsJSON, _ := json.Marshal(params)
-	hashInput += string(paramsJSON)
-
-	// Calculate SHA256 hash
-	hash := sha256.Sum256([]byte(hashInput))
-
-	return fmt.Sprintf("%x", hash[:16]) // Use first 16 bytes (32 hex chars)
 }
 
 // calculateAndAllocateSpyreCards calculates required Spyre cards and creates allocation pool.
