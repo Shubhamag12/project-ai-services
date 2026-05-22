@@ -486,7 +486,7 @@ func getCaddyHTTPSPort(rt *podman.PodmanClient, caddyPodName string) (string, er
 	return "", fmt.Errorf("HTTPS port mapping not found in pod ports")
 }
 
-// GetCatalogRouteInfo retrieves route domains and HTTPS port for the catalog service without registering routes.
+// GetCatalogRouteInfo retrieves route domains and HTTPS port for the catalog service.
 func GetCatalogRouteInfo(rt *podman.PodmanClient, tp templates.Template, appTemplateName string, argParams map[string]string) (map[string]string, string, error) {
 	// Extract routes from all templates
 	routeInfos, err := extractAllRoutesFromTemplates(tp, appTemplateName, argParams)
