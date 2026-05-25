@@ -10,6 +10,7 @@ import (
 	catalogPodman "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -40,7 +41,10 @@ func Run(opts ConfigureOptions) error {
 	switch opts.Runtime {
 	case types.RuntimeTypePodman:
 		// Determine Podman URI
-		podmanURI := getPodmanURI()
+		podmanURI, err := utils.ResolvePodmanURI()
+		if err != nil {
+			return fmt.Errorf("failed to generate podman uri: %w", err)
+		}
 
 		// Determine auth file path
 		authFilePath := getAuthFilePath()
@@ -53,13 +57,6 @@ func Run(opts ConfigureOptions) error {
 	default:
 		return fmt.Errorf("unsupported runtime type: %s", opts.Runtime)
 	}
-}
-
-// getPodmanURI determines the Podman socket URI.
-func getPodmanURI() string {
-	// TODO: Need to take care for getting rootless socket
-	// Return default local Unix socket
-	return "/run/podman/podman.sock"
 }
 
 // getAuthFilePath determines the auth.json file path.

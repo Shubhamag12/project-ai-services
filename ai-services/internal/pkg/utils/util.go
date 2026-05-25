@@ -5,6 +5,7 @@ import (
 	"maps"
 	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -531,4 +532,37 @@ func CreateDir(path string) error {
 	}
 
 	return nil
+}
+
+func ResolvePodmanURI() (string, error) {
+	if v, found := os.LookupEnv("CONTAINER_HOST"); found {
+		return v, nil
+	}
+
+	if os.Geteuid() == 0 {
+		return getPodmanURIAsRoot()
+	}
+
+	return fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", os.Getuid()), nil
+}
+
+// getPodmanURIAsRoot determines the appropriate Podman socket URI when running with root privileges.
+// If the process was elevated via sudo (SUDO_USER is set), it returns the socket path
+// for the original user's rootless Podman instance to maintain user context.
+// Otherwise, it returns the system-wide root Podman socket path.
+func getPodmanURIAsRoot() (string, error) {
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		return "unix:///run/podman/podman.sock", nil
+	}
+
+	u, err := user.Lookup(sudoUser)
+	if err != nil {
+		return "", fmt.Errorf("failed to lookup user %s: %w", sudoUser, err)
+	}
+
+	return fmt.Sprintf(
+		"unix:///run/user/%s/podman/podman.sock",
+		u.Uid,
+	), nil
 }
