@@ -87,7 +87,7 @@ func runConfigure(argParams map[string]string) error {
 	logger.Infof("Using base directory: %s\n", aiServicesDir, logger.VerbosityLevelDebug)
 
 	// create model directory
-	modelPath := filepath.Join(aiServicesDir, "model")
+	modelPath := filepath.Join(aiServicesDir, "models")
 	err = utils.CreateDir(modelPath)
 	if err != nil {
 		return fmt.Errorf("failed to create model directory: %w", err)
