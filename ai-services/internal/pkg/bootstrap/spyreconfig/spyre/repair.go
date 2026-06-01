@@ -61,6 +61,7 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	results = append(results, fixSystemdUserSliceLimits(checkMap))
 	results = append(results, fixSELinuxVFIOPolicy())
 	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
+	results = append(results, fixSELinuxPodmanSocketPolicy())
 
 	return results
 }
@@ -532,7 +533,7 @@ func fixSELinuxVFIOPolicy() RepairResult {
 		}
 	}()
 
-	if err := buildAndInstallSELinuxPolicy(tmpDir); err != nil {
+	if err := buildAndInstallVFIOPolicy(tmpDir); err != nil {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
@@ -548,21 +549,7 @@ func fixSELinuxVFIOPolicy() RepairResult {
 }
 
 // buildAndInstallSELinuxPolicy builds and installs the SELinux policy module.
-func buildAndInstallSELinuxPolicy(tmpDir string) error {
-	const policyName = "vllm_vfio_policy"
-	const teContent = `
-module vllm_vfio_policy 1.0;
-
-require {
-    type container_t;
-    type vfio_device_t;
-    class chr_file { ioctl open read write getattr };
-}
-
-# Allow container_t (vLLM) to access vfio_device_t
-allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
-`
-
+func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstall bool) error {
 	// Write the .te file
 	tePath := fmt.Sprintf("%s/%s.te", tmpDir, policyName)
 	if err := utils.WriteToFile(tePath, teContent); err != nil {
@@ -583,6 +570,12 @@ allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
 		return fmt.Errorf("failed to package policy module: %v, stderr: %s", err, stderr)
 	}
 
+	// Install or update the module
+	if reinstall {
+		// Remove old module first
+		_, _, _, _ = utils.ExecuteCommand("semodule", "-r", policyName)
+	}
+
 	// Install the module
 	exitCode, _, stderr, err = utils.ExecuteCommand("semodule", "-i", ppPath)
 	if err != nil || exitCode != 0 {
@@ -590,6 +583,89 @@ allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
 	}
 
 	return nil
+}
+
+// buildAndInstallVFIOPolicy builds and installs the VFIO SELinux policy module.
+func buildAndInstallVFIOPolicy(tmpDir string) error {
+	const policyName = "vllm_vfio_policy"
+	const teContent = `
+module vllm_vfio_policy 1.0;
+
+require {
+    type container_t;
+    type vfio_device_t;
+    class chr_file { ioctl open read write getattr };
+}
+
+# Allow container_t (vLLM) to access vfio_device_t
+allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
+`
+
+	return buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, false)
+}
+
+// fixSELinuxPodmanSocketPolicy configures SELinux policy for Podman socket access.
+// This allows containers with container_t type to access the Podman socket.
+// The policy will be reinstalled if it already exists to ensure it's up to date.
+func fixSELinuxPodmanSocketPolicy() RepairResult {
+	checkName := "SELinux Podman socket policy configuration"
+
+	enabled, msg := isSELinuxEnabledAndActive()
+	if !enabled {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
+	}
+
+	// Check if policy is already installed
+	policyInstalled := false
+	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
+	if err == nil && exitCode == 0 && strings.Contains(stdout, "podman_socket_policy") {
+		policyInstalled = true
+	}
+
+	tmpDir, err := os.MkdirTemp("", "selinux_podman_build")
+	if err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix,
+			Error: fmt.Errorf("failed to create temp directory: %w", err)}
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove temp directory %s: %v\n", tmpDir, err)
+		}
+	}()
+
+	if err := buildAndInstallPodmanSocketPolicy(tmpDir, policyInstalled); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	statusMsg := "SELinux Podman socket policy configured successfully"
+	if policyInstalled {
+		statusMsg = "SELinux Podman socket policy updated successfully"
+	}
+
+	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: statusMsg}
+}
+
+// buildAndInstallPodmanSocketPolicy builds and installs the SELinux policy module for Podman socket access.
+// If reinstall is true, the policy will be updated even if it already exists.
+func buildAndInstallPodmanSocketPolicy(tmpDir string, reinstall bool) error {
+	const policyName = "podman_socket_policy"
+	const teContent = `
+module podman_socket_policy 1.0;
+
+require {
+    type container_t;
+    type var_run_t;
+    class sock_file { getattr read write };
+    class unix_stream_socket connectto;
+}
+
+# Allow container_t to access Podman socket (var_run_t)
+# This enables containers to communicate with the host Podman socket
+allow container_t var_run_t:sock_file { getattr read write };
+allow container_t var_run_t:unix_stream_socket connectto;
+`
+
+	return buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, reinstall)
 }
 
 // fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.
