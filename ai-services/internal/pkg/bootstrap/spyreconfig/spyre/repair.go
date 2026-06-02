@@ -629,14 +629,35 @@ module podman_socket_policy 1.0;
 require {
     type container_t;
     type var_run_t;
-    class sock_file { getattr read write };
+	type user_tmp_t;
+
+    class sock_file { getattr read write open };
     class unix_stream_socket connectto;
+    class dir search;
 }
 
-# Allow container_t to access Podman socket (var_run_t)
-# This enables containers to communicate with the host Podman socket
-allow container_t var_run_t:sock_file { getattr read write };
+# ------------------------------------------------------------------
+# Root/system Podman socket
+# Example:
+#   /run/podman/podman.sock
+# SELinux type:
+#   var_run_t
+# ------------------------------------------------------------------
+
+allow container_t var_run_t:sock_file { getattr read write open };
 allow container_t var_run_t:unix_stream_socket connectto;
+
+# ------------------------------------------------------------------
+# Rootless Podman socket
+# Example:
+#   /run/user/<uid>/podman/podman.sock
+# SELinux type:
+#   user_tmp_t
+# ------------------------------------------------------------------
+
+allow container_t user_tmp_t:sock_file { getattr read write open };
+allow container_t user_tmp_t:unix_stream_socket connectto;
+allow container_t user_tmp_t:dir search;
 `
 
 	// Use reinstall=true to ensure policy is updated if it already exists
