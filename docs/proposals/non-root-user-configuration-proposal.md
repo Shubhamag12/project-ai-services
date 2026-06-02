@@ -79,10 +79,17 @@ drwxr-xr-x. 6 root root 360 Apr 27 11:53 ..
 - Containers could not access Spyre cards, causing crashes
 
 ### Solution Implemented
-Created custom SELinux policy module `vllm_vfio_policy` that:
+Created custom SELinux policy modules:
+
+**1. VFIO Device Access Policy (`vllm_vfio_policy`)**:
 - Allows `container_t` type to access `vfio_device_t` devices
 - Grants minimal required permissions: `ioctl`, `open`, `read`, `write`, `getattr`
 - Sets persistent file context rules: `/dev/vfio/*` → `vfio_device_t`
+
+**2. Podman Socket Access Policy (`podman_socket_policy`)**:
+- Allows containers with `container_t` type to access the Podman socket
+- Enables rootless container operations with proper SELinux context
+- Required for non-root users to manage containers securely
 
 ### Configuration Changes
 **Container Templates** (`vllm-server.yaml.tmpl`):
@@ -131,6 +138,11 @@ If running via sudo (SUDO_USER environment variable set):
 **Detection Method**:
 - `os.Geteuid()` - Check effective user ID
 - `SUDO_USER` environment variable - Identify original user when using sudo
+
+**Additional Configuration**:
+- **Socket Resolution**: Automatically resolves the correct Podman socket path for both root and non-root scenarios
+- **Auth File Path**: Resolves Podman auth file path based on user context (root vs non-root)
+- **Rootless Support**: Full support for rootless Podman operations with proper socket access
 
 ---
 
@@ -242,6 +254,36 @@ SMT level affects CPU performance for Spyre card operations. Previously configur
 
 ---
 
+## 6. Privileged Port Restrictions for Non-Root Users
+
+### Problem
+Non-root users cannot bind to privileged ports (ports below 1024) due to Linux security restrictions. This affects services that traditionally use standard ports like 443 (HTTPS).
+
+### Error
+```
+ERRO[0003] "rootlessport cannot expose privileged port 443, you can add 'net.ipv4.ip_unprivileged_port_start=443' to /etc/sysctl.conf (currently 1024), or choose a larger port number (>= 1024): listen tcp 0.0.0.0:443: bind: permission denied"
+Error: unable to start container "f72329a97540825bb753ec41806021c9fd15890ae54f6874b2f13e2c6bc8890a": starting some containers: internal libpod error
+```
+
+### Solution Implemented
+**Requirement**: Users must specify a non-privileged port when configuring the catalog service.
+
+**Usage**:
+```bash
+ai-services catalog configure --http-port 8443
+```
+
+**Rationale**:
+- Port 8443 is a common alternative to 443 for HTTPS services
+- Avoids requiring system-level configuration changes (`net.ipv4.ip_unprivileged_port_start`)
+- Maintains security by not granting unnecessary privileges to non-root users
+- Users can configure their firewall/load balancer to forward port 443 to 8443 if needed
+
+**Alternative Approach** (not recommended):
+System administrators could modify `/etc/sysctl.conf` to allow non-root users to bind to lower ports, but this reduces system security and is not the preferred solution.
+
+---
+
 ## Security Considerations
 
 ### SELinux Policy
@@ -255,6 +297,7 @@ SMT level affects CPU performance for Spyre card operations. Previously configur
 - **Principle of Least Privilege**: CPU-only containers use default context
 - **No Privilege Escalation**: Containers run as non-root user inside
 - **Device Access Control**: Only containers with proper annotations get VFIO access
+- **User Namespace Mapping**: Removed dependency on `keep-id` user namespace mapping by handling Podman socket access through SELinux policy configuration, improving security and compatibility
 
 ### Group Membership
 - **Explicit Assignment**: Users must be explicitly added to `sentient` group
