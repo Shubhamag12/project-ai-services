@@ -508,24 +508,41 @@ func isSELinuxEnabledAndActive() (bool, string) {
 // fixSELinuxVFIOPolicy configures SELinux policy for VFIO device access.
 // This allows containers with container_t type to access VFIO devices.
 func fixSELinuxVFIOPolicy() RepairResult {
-	checkName := "SELinux VFIO policy configuration"
+	result := applySELinuxPolicy(
+		"SELinux VFIO policy configuration",
+		"vllm_vfio_policy",
+		vfioPolicyContent,
+		"SELinux VFIO policy configured successfully",
+	)
 
+	// Reload udev rules to apply SELinux labels to existing devices if policy was fixed
+	if result.Status == StatusFixed {
+		if err := utils.ReloadUdevRules(); err != nil {
+			return RepairResult{
+				CheckName: result.CheckName,
+				Status:    StatusFailedToFix,
+				Error:     err,
+			}
+		}
+	}
+
+	return result
+}
+
+// applySELinuxPolicy is a generic helper to apply SELinux policies.
+func applySELinuxPolicy(checkName, policyName, policyContent, successMessage string) RepairResult {
 	enabled, msg := isSELinuxEnabledAndActive()
 	if !enabled {
 		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
 	}
 
-	// Check if policy is already installed
-	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
-	if err == nil && exitCode == 0 && strings.Contains(stdout, "vllm_vfio_policy") {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped,
-			Message: "SELinux VFIO policy already installed"}
-	}
-
 	tmpDir, err := os.MkdirTemp("", "selinux_build")
 	if err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix,
-			Error: fmt.Errorf("failed to create temp directory: %w", err)}
+		return RepairResult{
+			CheckName: checkName,
+			Status:    StatusFailedToFix,
+			Error:     fmt.Errorf("failed to create temp directory: %w", err),
+		}
 	}
 	defer func() {
 		if err := os.RemoveAll(tmpDir); err != nil {
@@ -533,34 +550,12 @@ func fixSELinuxVFIOPolicy() RepairResult {
 		}
 	}()
 
-	const policyName = "vllm_vfio_policy"
-	const teContent = `
-module vllm_vfio_policy 1.0;
-
-require {
-    type container_t;
-    type vfio_device_t;
-    class chr_file { ioctl open read write getattr };
-}
-
-# Allow container_t (vLLM) to access vfio_device_t
-allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
-`
-
 	// Use reinstall=true to ensure policy is updated if it already exists
-	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, true); err != nil {
+	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, policyContent, true); err != nil {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
-	// Reload udev rules to apply SELinux labels to existing devices.
-	// The udev rules include SECLABEL{selinux} directive which automatically
-	// labels devices on creation (including hotplug)
-	if err := utils.ReloadUdevRules(); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed,
-		Message: "SELinux VFIO policy configured successfully"}
+	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: successMessage}
 }
 
 // buildAndInstallSELinuxPolicy builds and installs a SELinux policy module.
@@ -602,71 +597,13 @@ func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstal
 
 // fixSELinuxPodmanSocketPolicy configures SELinux policy for Podman socket access.
 // This allows containers with container_t type to access the Podman socket.
-// The policy will be reinstalled if it already exists to ensure it's up to date.
 func fixSELinuxPodmanSocketPolicy() RepairResult {
-	checkName := "SELinux Podman socket policy configuration"
-
-	enabled, msg := isSELinuxEnabledAndActive()
-	if !enabled {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
-	}
-
-	tmpDir, err := os.MkdirTemp("", "selinux_podman_build")
-	if err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix,
-			Error: fmt.Errorf("failed to create temp directory: %w", err)}
-	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove temp directory %s: %v\n", tmpDir, err)
-		}
-	}()
-
-	const policyName = "podman_socket_policy"
-	const teContent = `
-module podman_socket_policy 1.0;
-
-require {
-    type container_t;
-    type var_run_t;
-	type user_tmp_t;
-
-    class sock_file { getattr read write open };
-    class unix_stream_socket connectto;
-    class dir search;
-}
-
-# ------------------------------------------------------------------
-# Root/system Podman socket
-# Example:
-#   /run/podman/podman.sock
-# SELinux type:
-#   var_run_t
-# ------------------------------------------------------------------
-
-allow container_t var_run_t:sock_file { getattr read write open };
-allow container_t var_run_t:unix_stream_socket connectto;
-
-# ------------------------------------------------------------------
-# Rootless Podman socket
-# Example:
-#   /run/user/<uid>/podman/podman.sock
-# SELinux type:
-#   user_tmp_t
-# ------------------------------------------------------------------
-
-allow container_t user_tmp_t:sock_file { getattr read write open };
-allow container_t user_tmp_t:unix_stream_socket connectto;
-allow container_t user_tmp_t:dir search;
-`
-
-	// Use reinstall=true to ensure policy is updated if it already exists
-	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, true); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed,
-		Message: "SELinux Podman socket policy configured successfully"}
+	return applySELinuxPolicy(
+		"SELinux Podman socket policy configuration",
+		"podman_socket_policy",
+		podmanSocketPolicyContent,
+		"SELinux Podman socket policy configured successfully",
+	)
 }
 
 // fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.
