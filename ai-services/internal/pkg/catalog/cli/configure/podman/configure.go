@@ -180,7 +180,7 @@ func prepareCatalogValues(tp templates.Template, podmanURI, authFilePath, passwo
 	argParams["backend.adminPasswordHash"] = passwordHash
 	argParams["backend.runtime"] = "podman"
 	argParams["backend.podman.uri"] = podmanURI
-	argParams["backend.podman.authFile"] = authFileBase64
+	argParams["backend.podman.authFileContent"] = authFileBase64
 	argParams["db.password"] = dbPasswordBase64
 
 	// Load values from catalog
