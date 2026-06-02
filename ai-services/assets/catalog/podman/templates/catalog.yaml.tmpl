@@ -129,6 +129,7 @@ spec:
           mountPath: {{ .Values.backend.podman.uri }}
         - name: podman-auth
           mountPath: /run/containers/auth.json
+          subDir: auth.json
           readOnly: true
         - name: iommu-groups
           mountPath: /sys/kernel/iommu_groups
