@@ -999,8 +999,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "component_type",
-                "provider_id",
-                "type"
+                "provider_id"
             ],
             "properties": {
                 "component_type": {
@@ -1016,7 +1015,7 @@ const docTemplate = `{
                 "provider_id": {
                     "type": "string"
                 },
-                "type": {
+                "version": {
                     "type": "string"
                 }
             }
@@ -1042,6 +1041,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Service"
                     }
+                },
+                "version": {
+                    "type": "string"
                 }
             }
         },
@@ -1057,8 +1059,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "catalog_id",
-                "components",
-                "type"
+                "components"
             ],
             "properties": {
                 "catalog_id": {
@@ -1069,9 +1070,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.Component"
                     }
-                },
-                "type": {
-                    "type": "string"
                 },
                 "version": {
                     "type": "string"
@@ -1295,6 +1293,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.DeployOptionsService"
                     }
+                },
+                "version": {
+                    "type": "string"
                 }
             }
         },
@@ -1330,7 +1331,13 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "resources": {
+                    "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources"
+                },
                 "schema": {
+                    "type": "string"
+                },
+                "version": {
                     "type": "string"
                 }
             }
@@ -1350,10 +1357,13 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "resources": {
+                    "$ref": "#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources"
+                },
                 "schema": {
                     "type": "string"
                 },
-                "type": {
+                "version": {
                     "type": "string"
                 }
             }
@@ -1377,6 +1387,30 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_project-ai-services_ai-services_internal_pkg_catalog_types.Resources": {
+            "type": "object",
+            "properties": {
+                "accelerators": {
+                    "description": "Accelerator cards (e.g., \"ibm.com/spyre_pf\": 1)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "cpu": {
+                    "description": "CPU cores",
+                    "type": "integer"
+                },
+                "memory": {
+                    "description": "Memory in bytes",
+                    "type": "integer"
+                },
+                "storage": {
+                    "description": "Storage in bytes",
                     "type": "integer"
                 }
             }
