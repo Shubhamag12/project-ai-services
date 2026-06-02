@@ -26,7 +26,7 @@ const (
 	CatalogSecretLabel = "ai-services.io/secret"
 	// CatalogSecretSkipLabel represents if catalog secret associated with pod should be skipped while deletion.
 	CatalogSecretSkipLabel = "ai-services.io/secret-skip-cleanup"
-	// PodmanAuthSecret represents podman auth secret name
+	// PodmanAuthSecret represents podman auth secret name.
 	PodmanAuthSecret = "podman-auth-secret"
 )
 
