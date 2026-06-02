@@ -586,9 +586,10 @@ func isSentientGroupPresent(value string) bool {
 	return slices.Contains(groups, sentientGroup)
 }
 
-// checkSELinuxVFIOPolicy validates SELinux policy for VFIO device access.
-func checkSELinuxVFIOPolicy() *check.Check {
-	selinuxCheck := check.NewCheck("SELinux VFIO policy configuration")
+// checkSELinuxPolicy is a helper function that validates SELinux policy installation.
+// It checks if SELinux is enabled, if the required path exists, and if the policy is installed.
+func checkSELinuxPolicy(checkName, policyName, requiredPath string) *check.Check {
+	selinuxCheck := check.NewCheck(checkName)
 
 	// Check if SELinux is enabled
 	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
@@ -607,61 +608,9 @@ func checkSELinuxVFIOPolicy() *check.Check {
 		return selinuxCheck
 	}
 
-	// Check if VFIO devices exist
-	if !utils.FileExists("/dev/vfio") {
-		// No VFIO devices - skip check (pass)
-		selinuxCheck.SetStatus(true)
-
-		return selinuxCheck
-	}
-
-	// Check if policy is installed (requires root/sudo)
-	exitCode, stdout, stderr, err := utils.ExecuteCommand("semodule", "-l")
-	if err != nil || exitCode != 0 {
-		// If permission denied, assume policy needs to be checked with sudo
-		// This is expected when running without sudo - skip check (pass)
-		if strings.Contains(stderr, "Permission denied") || strings.Contains(stderr, "access") {
-			selinuxCheck.SetStatus(true)
-
-			return selinuxCheck
-		}
-		// Other errors mean policy is not installed
-		selinuxCheck.SetStatus(false)
-
-		return selinuxCheck
-	}
-
-	// Policy should be installed
-	policyInstalled := strings.Contains(stdout, "vllm_vfio_policy")
-	selinuxCheck.SetStatus(policyInstalled)
-
-	return selinuxCheck
-}
-
-// checkSELinuxPodmanSocketPolicy validates SELinux policy for Podman socket access.
-func checkSELinuxPodmanSocketPolicy() *check.Check {
-	selinuxCheck := check.NewCheck("SELinux Podman socket policy configuration")
-
-	// Check if SELinux is enabled
-	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
-	if err != nil || exitCode != 0 {
-		// SELinux not available - skip check (pass)
-		selinuxCheck.SetStatus(true)
-
-		return selinuxCheck
-	}
-
-	status := strings.TrimSpace(stdout)
-	if status == "Disabled" {
-		// SELinux disabled - skip check (pass)
-		selinuxCheck.SetStatus(true)
-
-		return selinuxCheck
-	}
-
-	// Check if Podman socket exists
-	if !utils.FileExists("/run/podman/podman.sock") {
-		// No Podman socket - skip check (pass)
+	// Check if required path exists (if specified)
+	if requiredPath != "" && !utils.FileExists(requiredPath) {
+		// Required path doesn't exist - skip check (pass)
 		selinuxCheck.SetStatus(true)
 
 		return selinuxCheck
@@ -684,10 +633,20 @@ func checkSELinuxPodmanSocketPolicy() *check.Check {
 	}
 
 	// Check if policy is installed
-	policyInstalled := strings.Contains(stdout, "podman_socket_policy")
+	policyInstalled := strings.Contains(stdout, policyName)
 	selinuxCheck.SetStatus(policyInstalled)
 
 	return selinuxCheck
+}
+
+// checkSELinuxVFIOPolicy validates SELinux policy for VFIO device access.
+func checkSELinuxVFIOPolicy() *check.Check {
+	return checkSELinuxPolicy("SELinux VFIO policy configuration", "vllm_vfio_policy", "/dev/vfio")
+}
+
+// checkSELinuxPodmanSocketPolicy validates SELinux policy for Podman socket access.
+func checkSELinuxPodmanSocketPolicy() *check.Check {
+	return checkSELinuxPolicy("SELinux Podman socket policy configuration", "podman_socket_policy", "/run/podman/podman.sock")
 }
 
 func setCheckResult(confCheck *check.ConfigurationFileCheck, found, correctValue bool) {

@@ -515,13 +515,6 @@ func fixSELinuxVFIOPolicy() RepairResult {
 		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
 	}
 
-	// Check if policy is already installed
-	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
-	if err == nil && exitCode == 0 && strings.Contains(stdout, "vllm_vfio_policy") {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped,
-			Message: "SELinux VFIO policy already installed"}
-	}
-
 	tmpDir, err := os.MkdirTemp("", "selinux_build")
 	if err != nil {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix,
@@ -533,7 +526,22 @@ func fixSELinuxVFIOPolicy() RepairResult {
 		}
 	}()
 
-	if err := buildAndInstallVFIOPolicy(tmpDir); err != nil {
+	const policyName = "vllm_vfio_policy"
+	const teContent = `
+module vllm_vfio_policy 1.0;
+
+require {
+    type container_t;
+    type vfio_device_t;
+    class chr_file { ioctl open read write getattr };
+}
+
+# Allow container_t (vLLM) to access vfio_device_t
+allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
+`
+
+	// Use reinstall=true to ensure policy is updated if it already exists
+	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, true); err != nil {
 		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 	}
 
@@ -585,25 +593,6 @@ func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstal
 	return nil
 }
 
-// buildAndInstallVFIOPolicy builds and installs the VFIO SELinux policy module.
-func buildAndInstallVFIOPolicy(tmpDir string) error {
-	const policyName = "vllm_vfio_policy"
-	const teContent = `
-module vllm_vfio_policy 1.0;
-
-require {
-    type container_t;
-    type vfio_device_t;
-    class chr_file { ioctl open read write getattr };
-}
-
-# Allow container_t (vLLM) to access vfio_device_t
-allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
-`
-
-	return buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, false)
-}
-
 // fixSELinuxPodmanSocketPolicy configures SELinux policy for Podman socket access.
 // This allows containers with container_t type to access the Podman socket.
 // The policy will be reinstalled if it already exists to ensure it's up to date.
@@ -613,13 +602,6 @@ func fixSELinuxPodmanSocketPolicy() RepairResult {
 	enabled, msg := isSELinuxEnabledAndActive()
 	if !enabled {
 		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
-	}
-
-	// Check if policy is already installed
-	policyInstalled := false
-	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
-	if err == nil && exitCode == 0 && strings.Contains(stdout, "podman_socket_policy") {
-		policyInstalled = true
 	}
 
 	tmpDir, err := os.MkdirTemp("", "selinux_podman_build")
@@ -633,21 +615,6 @@ func fixSELinuxPodmanSocketPolicy() RepairResult {
 		}
 	}()
 
-	if err := buildAndInstallPodmanSocketPolicy(tmpDir, policyInstalled); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	statusMsg := "SELinux Podman socket policy configured successfully"
-	if policyInstalled {
-		statusMsg = "SELinux Podman socket policy updated successfully"
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: statusMsg}
-}
-
-// buildAndInstallPodmanSocketPolicy builds and installs the SELinux policy module for Podman socket access.
-// If reinstall is true, the policy will be updated even if it already exists.
-func buildAndInstallPodmanSocketPolicy(tmpDir string, reinstall bool) error {
 	const policyName = "podman_socket_policy"
 	const teContent = `
 module podman_socket_policy 1.0;
@@ -665,7 +632,13 @@ allow container_t var_run_t:sock_file { getattr read write };
 allow container_t var_run_t:unix_stream_socket connectto;
 `
 
-	return buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, reinstall)
+	// Use reinstall=true to ensure policy is updated if it already exists
+	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent, true); err != nil {
+		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	}
+
+	return RepairResult{CheckName: checkName, Status: StatusFixed,
+		Message: "SELinux Podman socket policy configured successfully"}
 }
 
 // fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.
@@ -728,29 +701,9 @@ SupplementaryGroups=sentient
 	return utils.WriteToFile(dropInFile, dropInContent)
 }
 
-func reloadAndRestartPodmanServices() error {
-	// Reload systemd daemon
-	exitCode, _, _, err := utils.ExecuteCommand("systemctl", "daemon-reload")
-	if err != nil || exitCode != 0 {
-		if err == nil {
-			err = os.ErrInvalid
-		}
-
-		return err
-	}
-
-	// Restart podman service
-	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.service")
-	if err != nil || exitCode != 0 {
-		if err == nil {
-			err = os.ErrInvalid
-		}
-
-		return err
-	}
-
-	// Restart podman socket
-	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.socket")
+// executeSystemctlCommand is a helper function to execute systemctl commands with consistent error handling.
+func executeSystemctlCommand(args ...string) error {
+	exitCode, _, _, err := utils.ExecuteCommand("systemctl", args...)
 	if err != nil || exitCode != 0 {
 		if err == nil {
 			err = os.ErrInvalid
@@ -760,6 +713,21 @@ func reloadAndRestartPodmanServices() error {
 	}
 
 	return nil
+}
+
+func reloadAndRestartPodmanServices() error {
+	// Reload systemd daemon
+	if err := executeSystemctlCommand("daemon-reload"); err != nil {
+		return err
+	}
+
+	// Restart podman service
+	if err := executeSystemctlCommand("restart", "podman.service"); err != nil {
+		return err
+	}
+
+	// Restart podman socket
+	return executeSystemctlCommand("restart", "podman.socket")
 }
 
 // Made with Bob
