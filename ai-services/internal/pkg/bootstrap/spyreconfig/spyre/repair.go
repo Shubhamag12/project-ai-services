@@ -556,7 +556,7 @@ allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
 		Message: "SELinux VFIO policy configured successfully"}
 }
 
-// buildAndInstallSELinuxPolicy builds and installs a generic SELinux policy module.
+// buildAndInstallSELinuxPolicy builds and installs a SELinux policy module.
 func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstall bool) error {
 	// Write the .te file
 	tePath := fmt.Sprintf("%s/%s.te", tmpDir, policyName)
@@ -602,6 +602,13 @@ func fixSELinuxPodmanSocketPolicy() RepairResult {
 	enabled, msg := isSELinuxEnabledAndActive()
 	if !enabled {
 		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
+	}
+
+	// Check if policy is already installed
+	exitCode, stdout, _, err := utils.ExecuteCommand("semodule", "-l")
+	if err == nil && exitCode == 0 && strings.Contains(stdout, "vllm_vfio_policy") {
+		return RepairResult{CheckName: checkName, Status: StatusSkipped,
+			Message: "SELinux VFIO policy already installed"}
 	}
 
 	tmpDir, err := os.MkdirTemp("", "selinux_podman_build")
@@ -701,9 +708,29 @@ SupplementaryGroups=sentient
 	return utils.WriteToFile(dropInFile, dropInContent)
 }
 
-// executeSystemctlCommand is a helper function to execute systemctl commands with consistent error handling.
-func executeSystemctlCommand(args ...string) error {
-	exitCode, _, _, err := utils.ExecuteCommand("systemctl", args...)
+func reloadAndRestartPodmanServices() error {
+	// Reload systemd daemon
+	exitCode, _, _, err := utils.ExecuteCommand("systemctl", "daemon-reload")
+	if err != nil || exitCode != 0 {
+		if err == nil {
+			err = os.ErrInvalid
+		}
+
+		return err
+	}
+
+	// Restart podman service
+	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.service")
+	if err != nil || exitCode != 0 {
+		if err == nil {
+			err = os.ErrInvalid
+		}
+
+		return err
+	}
+
+	// Restart podman socket
+	exitCode, _, _, err = utils.ExecuteCommand("systemctl", "restart", "podman.socket")
 	if err != nil || exitCode != 0 {
 		if err == nil {
 			err = os.ErrInvalid
@@ -713,21 +740,6 @@ func executeSystemctlCommand(args ...string) error {
 	}
 
 	return nil
-}
-
-func reloadAndRestartPodmanServices() error {
-	// Reload systemd daemon
-	if err := executeSystemctlCommand("daemon-reload"); err != nil {
-		return err
-	}
-
-	// Restart podman service
-	if err := executeSystemctlCommand("restart", "podman.service"); err != nil {
-		return err
-	}
-
-	// Restart podman socket
-	return executeSystemctlCommand("restart", "podman.socket")
 }
 
 // Made with Bob
