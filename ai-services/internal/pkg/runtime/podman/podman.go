@@ -106,12 +106,8 @@ func (pc *PodmanClient) PullImage(image string) error {
 	// Create pull options with auth file from environment
 	opts := &images.PullOptions{}
 	if authFile := os.Getenv("REGISTRY_AUTH_FILE"); authFile != "" {
-		fmt.Println(authFile)
 		opts.Authfile = &authFile
 	}
-
-	cont, _ := os.ReadFile(*opts.Authfile)
-	fmt.Println(string(cont))
 
 	_, err := images.Pull(pc.Context, image, opts)
 	if err != nil {
