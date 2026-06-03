@@ -7,6 +7,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/check"
 	"github.com/project-ai-services/ai-services/internal/pkg/bootstrap/spyreconfig/utils"
+	"github.com/project-ai-services/ai-services/internal/pkg/utils/selinux"
 )
 
 // RepairStatus represents the status of a repair operation.
@@ -511,7 +512,7 @@ func fixSELinuxVFIOPolicy() RepairResult {
 	result := applySELinuxPolicy(
 		"SELinux VFIO policy configuration",
 		"vllm_vfio_policy",
-		vfioPolicyContent,
+		selinux.VFIOPolicyContent,
 		"SELinux VFIO policy configured successfully",
 	)
 
@@ -601,7 +602,7 @@ func fixSELinuxPodmanSocketPolicy() RepairResult {
 	return applySELinuxPolicy(
 		"SELinux Podman socket policy configuration",
 		"podman_socket_policy",
-		podmanSocketPolicyContent,
+		selinux.PodmanSocketPolicyContent,
 		"SELinux Podman socket policy configured successfully",
 	)
 }

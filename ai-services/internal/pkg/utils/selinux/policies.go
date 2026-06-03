@@ -1,8 +1,8 @@
-package spyre
+package selinux
 
-// vfioPolicyContent defines the SELinux policy for VFIO device access.
+// VFIOPolicyContent defines the SELinux policy for VFIO device access.
 // This allows containers with container_t type to access VFIO devices.
-const vfioPolicyContent = `
+const VFIOPolicyContent = `
 module vllm_vfio_policy 1.0;
 
 require {
@@ -15,9 +15,9 @@ require {
 allow container_t vfio_device_t:chr_file { ioctl open read write getattr };
 `
 
-// podmanSocketPolicyContent defines the SELinux policy for Podman socket access.
+// PodmanSocketPolicyContent defines the SELinux policy for Podman socket access.
 // This allows containers with container_t type to access the Podman socket.
-const podmanSocketPolicyContent = `
+const PodmanSocketPolicyContent = `
 module podman_socket_policy 1.0;
 
 require {
