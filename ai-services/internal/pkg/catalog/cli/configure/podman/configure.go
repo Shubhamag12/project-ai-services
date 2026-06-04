@@ -218,7 +218,7 @@ func loadCatalogTemplates(s *spinner.Spinner) (templates.Template, *templates.Ap
 }
 
 // prepareCatalogValues prepares the values map with configure-specific configuration.
-func prepareCatalogValues(tp templates.Template, podmanURI, user, authFilePath, passwordHash string, argParams map[string]string) (map[string]any, error) {
+func prepareCatalogValues(tp templates.Template, podmanURI, authFilePath, user, passwordHash string, argParams map[string]string) (map[string]any, error) {
 	// Generate database password
 	dbPassword, err := utils.GenerateRandomPassword()
 	if err != nil {
