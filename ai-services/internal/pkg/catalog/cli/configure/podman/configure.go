@@ -35,7 +35,7 @@ const (
 )
 
 // DeployCatalog deploys the catalog service using the assets/catalog template for podman runtime.
-func DeployCatalog(ctx context.Context, podmanURI, user, authFilePath, passwordHash, baseDir string, argParams map[string]string, httpsPort int) error {
+func DeployCatalog(ctx context.Context, podmanURI, authFilePath, user, passwordHash, baseDir string, argParams map[string]string, httpsPort int) error {
 	s := spinner.New("Deploying catalog service...")
 	s.Start(ctx)
 
@@ -61,7 +61,7 @@ func DeployCatalog(ctx context.Context, podmanURI, user, authFilePath, passwordH
 	}
 
 	// Prepare deployment with authFilePath
-	hostIP, caddyPodName, caddyAdminURL, values, err := prepareCatalogDeployment(tp, podmanURI, user, authFilePath, passwordHash, baseDir, argParams, s)
+	hostIP, caddyPodName, caddyAdminURL, values, err := prepareCatalogDeployment(tp, podmanURI, authFilePath, user, passwordHash, baseDir, argParams, s)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func initializeCatalogDeployment(argParams map[string]string, httpsPort int, s *
 }
 
 // prepareCatalogDeployment prepares all necessary data for deployment.
-func prepareCatalogDeployment(tp templates.Template, podmanURI, user, authFilePath, passwordHash, baseDir string, argParams map[string]string, s *spinner.Spinner) (string, string, string, map[string]any, error) {
+func prepareCatalogDeployment(tp templates.Template, podmanURI, authFilePath, user, passwordHash, baseDir string, argParams map[string]string, s *spinner.Spinner) (string, string, string, map[string]any, error) {
 	// Get host IP for template rendering
 	hostIP, err := utils.GetHostIP()
 	if err != nil {
@@ -133,7 +133,7 @@ func prepareCatalogDeployment(tp templates.Template, podmanURI, user, authFilePa
 	caddyAdminURL := fmt.Sprintf("http://%s:2019", caddyPodName)
 
 	// Prepare values with configure-specific configuration
-	values, err := prepareCatalogValues(tp, podmanURI, user, authFilePath, passwordHash, argParams)
+	values, err := prepareCatalogValues(tp, podmanURI, authFilePath, user, passwordHash, argParams)
 	if err != nil {
 		s.Fail("failed to load values")
 
