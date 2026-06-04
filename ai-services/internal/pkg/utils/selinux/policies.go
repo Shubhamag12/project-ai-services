@@ -22,12 +22,35 @@ module ai_services_root_policy 1.0;
 require {
     type var_run_t;
     type container_runtime_t;
+    type container_t;
+
+    # Marks ai_services_root_t as a process domain
+    attribute domain;
+
+    # Marks ai_services_root_t as a container domain so that container
+    # runtime rules (networking, mounts, etc.) apply to it
+    attribute container_domain;
+
     class sock_file { getattr open read write };
     class unix_stream_socket connectto;
+
+    # Needed for the process transition rule below
+    class process transition;
 }
 
 type ai_services_root_t;
 
+# Associate ai_services_root_t with the domain attribute
+typeattribute ai_services_root_t domain;
+
+# Associate ai_services_root_t with container_domain attribute
+typeattribute ai_services_root_t container_domain;
+
+# Allow the container runtime (running as container_t) to transition
+# the process into ai_services_root_t when the security label is set
+allow container_t ai_services_root_t:process transition;
+
+# Allow the custom type to access the root podman socket
 allow ai_services_root_t var_run_t:sock_file { getattr open read write };
 allow ai_services_root_t var_run_t:unix_stream_socket connectto;
 allow ai_services_root_t container_runtime_t:unix_stream_socket connectto;
