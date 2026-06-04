@@ -10,6 +10,7 @@ backend:
   podman:
     uri: "/run/podman/podman.sock"
     authFileContent: ""
+  usertype: ""
 
 db:
   port: ""

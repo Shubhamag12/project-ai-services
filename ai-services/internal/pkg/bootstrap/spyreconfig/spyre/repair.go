@@ -490,109 +490,41 @@ func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResu
 		Message: fmt.Sprintf("Configured systemd slice limits for user %s (UID: %s)", sudoUser, userID)}
 }
 
-// isSELinuxEnabledAndActive checks if SELinux is enabled and active.
-func isSELinuxEnabledAndActive() (bool, string) {
-	exitCode, stdout, _, err := utils.ExecuteCommand("getenforce")
-	if err != nil || exitCode != 0 {
-		return false, "SELinux not available or not enabled"
-	}
-
-	status := strings.TrimSpace(stdout)
-	if status == "Disabled" {
-		return false, "SELinux is disabled"
-	}
-
-	return true, ""
-}
-
 // fixSELinuxVFIOPolicy configures SELinux policy for VFIO device access.
 // This allows containers with container_t type to access VFIO devices.
 func fixSELinuxVFIOPolicy() RepairResult {
-	result := ApplySELinuxPolicy(
-		"SELinux VFIO policy configuration",
-		"vllm_vfio_policy",
-		selinux.VFIOPolicyContent,
-		"SELinux VFIO policy configured successfully",
-	)
+	checkName := "SELinux VFIO policy configuration"
+	applyResult := selinux.ApplySELinuxPolicy("vllm_vfio_policy", selinux.VFIOPolicyContent)
 
-	// Reload udev rules to apply SELinux labels to existing devices if policy was fixed
-	if result.Status == StatusFixed {
-		if err := utils.ReloadUdevRules(); err != nil {
-			return RepairResult{
-				CheckName: result.CheckName,
-				Status:    StatusFailedToFix,
-				Error:     err,
-			}
+	if !applyResult.Success {
+		status := StatusFailedToFix
+		if applyResult.Message != "" && applyResult.Error == nil {
+			// SELinux is disabled or not available
+			status = StatusSkipped
+		}
+
+		return RepairResult{
+			CheckName: checkName,
+			Status:    status,
+			Message:   applyResult.Message,
+			Error:     applyResult.Error,
 		}
 	}
 
-	return result
-}
-
-// ApplySELinuxPolicy is a generic helper to apply SELinux policies.
-func ApplySELinuxPolicy(checkName, policyName, policyContent, successMessage string) RepairResult {
-	enabled, msg := isSELinuxEnabledAndActive()
-	if !enabled {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped, Message: msg}
-	}
-
-	tmpDir, err := os.MkdirTemp("", "selinux_build")
-	if err != nil {
+	// Reload udev rules to apply SELinux labels to existing devices if policy was fixed
+	if err := utils.ReloadUdevRules(); err != nil {
 		return RepairResult{
 			CheckName: checkName,
 			Status:    StatusFailedToFix,
-			Error:     fmt.Errorf("failed to create temp directory: %w", err),
+			Error:     err,
 		}
 	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove temp directory %s: %v\n", tmpDir, err)
-		}
-	}()
 
-	// Use reinstall=true to ensure policy is updated if it already exists
-	if err := buildAndInstallSELinuxPolicy(tmpDir, policyName, policyContent, true); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
+	return RepairResult{
+		CheckName: checkName,
+		Status:    StatusFixed,
+		Message:   "SELinux VFIO policy configured successfully",
 	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed, Message: successMessage}
-}
-
-// buildAndInstallSELinuxPolicy builds and installs a SELinux policy module.
-func buildAndInstallSELinuxPolicy(tmpDir, policyName, teContent string, reinstall bool) error {
-	// Write the .te file
-	tePath := fmt.Sprintf("%s/%s.te", tmpDir, policyName)
-	if err := utils.WriteToFile(tePath, teContent); err != nil {
-		return fmt.Errorf("failed to write .te file: %w", err)
-	}
-
-	// Compile .te -> .mod
-	modPath := fmt.Sprintf("%s/%s.mod", tmpDir, policyName)
-	exitCode, _, stderr, err := utils.ExecuteCommand("checkmodule", "-M", "-m", "-o", modPath, tePath)
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("failed to compile policy module: %v, stderr: %s", err, stderr)
-	}
-
-	// Package .mod -> .pp
-	ppPath := fmt.Sprintf("%s/%s.pp", tmpDir, policyName)
-	exitCode, _, stderr, err = utils.ExecuteCommand("semodule_package", "-o", ppPath, "-m", modPath)
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("failed to package policy module: %v, stderr: %s", err, stderr)
-	}
-
-	// Install or update the module
-	if reinstall {
-		// Remove old module first
-		_, _, _, _ = utils.ExecuteCommand("semodule", "-r", policyName)
-	}
-
-	// Install the module
-	exitCode, _, stderr, err = utils.ExecuteCommand("semodule", "-i", ppPath)
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("failed to install policy module: %v, stderr: %s", err, stderr)
-	}
-
-	return nil
 }
 
 // fixPodmanServiceSupplementaryGroups repairs the podman service SupplementaryGroups configuration.

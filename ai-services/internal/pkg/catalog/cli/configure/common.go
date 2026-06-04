@@ -47,13 +47,21 @@ func Run(opts ConfigureOptions) error {
 			return fmt.Errorf("failed to generate podman uri: %w", err)
 		}
 
+		var user string
+		// Determine user type (root or nonroot)
+		if os.Geteuid() == 0 {
+			user = "ai_services_root_t"
+		} else {
+			user = "ai_services_nonroot_t"
+		}
+
 		// Determine auth file path
 		authFilePath, err := getAuthFilePath()
 		if err != nil {
 			return fmt.Errorf("failed to get auth file path: %w", err)
 		}
 
-		return catalogPodman.DeployCatalog(ctx, podmanURI, authFilePath, passwordHash, opts.BaseDir, opts.ArgParams, opts.HttpsPort)
+		return catalogPodman.DeployCatalog(ctx, podmanURI, authFilePath, user, passwordHash, opts.BaseDir, opts.ArgParams, opts.HttpsPort)
 
 	case types.RuntimeTypeOpenShift:
 		return fmt.Errorf("openshift runtime is not yet supported for catalog configure")

@@ -277,27 +277,23 @@ func getSMTLevel(output string) (int, error) {
 // setupSELinuxPodmanSocketPolicy configures SELinux policy for Podman socket access.
 func setupSELinuxPodmanSocketPolicy() error {
 	// Apply root Podman socket policy
-	result := spyre.ApplySELinuxPolicy(
-		"SELinux Podman socket policy configuration",
+	result := selinux.ApplySELinuxPolicy(
 		"ai_services_root_policy",
-		selinux.RootPodmanSocketPolicyContent,
-		"SELinux Podman socket policy configured successfully",
+		selinux.AiServicesRootPolicy,
 	)
 
-	if result.Status == spyre.StatusFailedToFix {
-		return result.Error
+	if !result.Success && result.Error != nil {
+		return fmt.Errorf("failed to apply root Podman socket policy: %w", result.Error)
 	}
 
 	// Apply rootless Podman socket policy
-	rootlessResult := spyre.ApplySELinuxPolicy(
-		"SELinux rootless Podman socket policy configuration",
+	rootlessResult := selinux.ApplySELinuxPolicy(
 		"ai_services_nonroot_policy",
-		selinux.RootlessPodmanSocketPolicyContent,
-		"SELinux rootless Podman socket policy configured successfully",
+		selinux.AiServicesNonRootPolicy,
 	)
 
-	if rootlessResult.Status == spyre.StatusFailedToFix {
-		return rootlessResult.Error
+	if !rootlessResult.Success && rootlessResult.Error != nil {
+		return fmt.Errorf("failed to apply rootless Podman socket policy: %w", rootlessResult.Error)
 	}
 
 	return nil
