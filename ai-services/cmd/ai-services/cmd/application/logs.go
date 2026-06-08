@@ -12,7 +12,10 @@ import (
 )
 
 var (
-	podName           string
+	// common flags.
+	podName string
+
+	// openshift flags.
 	containerNameOrID string
 )
 
@@ -62,12 +65,16 @@ Arguments
 
 func init() {
 	initLogsCommonFlags()
+	initLogsOpenshiftFlags()
 }
 
 func initLogsCommonFlags() {
 	logsCmd.Flags().StringVar(&podName, appFlags.Logs.Pod, "", "Pod name to show logs from (required)")
-	logsCmd.Flags().StringVar(&containerNameOrID, appFlags.Logs.Container, "", "Container logs to show logs from (Optional)")
 	_ = logsCmd.MarkFlagRequired(appFlags.Logs.Pod)
+}
+
+func initLogsOpenshiftFlags() {
+	logsCmd.Flags().StringVar(&containerNameOrID, appFlags.Logs.Container, "", "Container logs to show logs from (Optional)")
 }
 
 // buildLogsFlagValidator creates and configures the flag validator for the logs command.
@@ -78,8 +85,11 @@ func buildLogsFlagValidator() *flagvalidator.FlagValidator {
 
 	// Register common flags
 	builder.
-		AddCommonFlag(appFlags.Logs.Pod, nil).
-		AddCommonFlag(appFlags.Logs.Container, nil)
+		AddCommonFlag(appFlags.Logs.Pod, nil)
+
+	// Register openshift flags
+	builder.
+		AddOpenShiftFlag(appFlags.Logs.Container, nil)
 
 	return builder.Build()
 }

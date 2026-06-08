@@ -34,7 +34,7 @@ var templatesCmd = &cobra.Command{
 		// For openshift runtime, always use the older/stable code path regardless of experimental flag
 		if experimentalTemplates && vars.RuntimeFactory.GetRuntimeType() == types.RuntimeTypePodman {
 			// Use experimental catalog templates listing (architectures and services)
-			return listCatalogTemplates(cmd)
+			return listCatalogTemplates()
 		}
 
 		tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
@@ -100,7 +100,7 @@ func init() {
 }
 
 // listCatalogTemplates lists architectures, services, and components from the catalog.
-func listCatalogTemplates(cmd *cobra.Command) error {
+func listCatalogTemplates() error {
 	// Create catalog provider
 	provider, err := catalog.NewCatalogProvider()
 	if err != nil {
