@@ -5,7 +5,6 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
-	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	appFlags "github.com/project-ai-services/ai-services/internal/pkg/cli/constants/application"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/flagvalidator"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
@@ -51,7 +50,7 @@ Arguments
 		// When experimentalLogs is true and runtime is podman, validate application name using catalog API
 		// For openshift runtime, always use the older/stable code path regardless of experimental flag
 		if experimentalLogs && rt == types.RuntimeTypePodman {
-			if err := validateApplicationName(applicationName); err != nil {
+			if err := utils.ValidateApplicationName(applicationName); err != nil {
 				return err
 			}
 		}
@@ -95,19 +94,4 @@ func buildLogsFlagValidator() *flagvalidator.FlagValidator {
 		AddCommonFlag(appFlags.Logs.Container, nil)
 
 	return builder.Build()
-}
-
-func validateApplicationName(appName string) error {
-	appClient, err := catalogClient.NewApplicationClient()
-	if err != nil {
-		return fmt.Errorf("failed to create application client: %w", err)
-	}
-
-	// Fetch specific application by name
-	_, err = utils.GetAppByName(appClient, appName)
-	if err != nil {
-		return fmt.Errorf("failed to fetch application '%s': %w", appName, err)
-	}
-
-	return nil
 }
