@@ -136,3 +136,41 @@ func GetPodsFromApplicationsPS(appName string) ([]types.Pod, error) {
 
 	return pods, nil
 }
+
+func GetPodsFromApplicationsPS(appName string) ([]types.Pod, error) {
+	var pods []types.Pod //nolint: prealloc
+	appClient, err := catalogClient.NewApplicationClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create application client: %w", err)
+	}
+
+	app, err := GetAppByName(appClient, appName)
+	if err != nil {
+		return nil, err
+	}
+
+	psResp, err := appClient.GetApplicationPS(app.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch application: %w", err)
+	}
+
+	// add components to the list of pods
+	for _, resp := range psResp.Components {
+		pod := types.Pod{
+			ID:   resp.PodName,
+			Name: resp.PodName,
+		}
+		pods = append(pods, pod)
+	}
+
+	// add services to the list of pods
+	for _, resp := range psResp.Services {
+		pod := types.Pod{
+			ID:   resp.PodName,
+			Name: resp.PodName,
+		}
+		pods = append(pods, pod)
+	}
+
+	return pods, nil
+}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	cliutils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
@@ -12,11 +13,20 @@ import (
 
 // Stop stops a running application.
 func (p *PodmanApplication) Stop(opts appTypes.StopOptions) error {
-	pods, err := p.runtime.ListPods(map[string][]string{
-		"label": {fmt.Sprintf("ai-services.io/application=%s", opts.Name)},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list pods: %w", err)
+	var pods []types.Pod
+	var err error
+	if !opts.Experimental {
+		pods, err = p.runtime.ListPods(map[string][]string{
+			"label": {fmt.Sprintf("ai-services.io/application=%s", opts.Name)},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list pods: %w", err)
+		}
+	} else {
+		pods, err = cliutils.GetPodsFromApplicationsPS(opts.Name)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(pods) == 0 {
