@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
-	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	cliutils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
@@ -24,7 +23,7 @@ func (p *PodmanApplication) Start(opts appTypes.StartOptions) error {
 			return err
 		}
 	} else {
-		pods, err = p.getPodsFromApplicationsPS(opts.Name)
+		pods, err = cliutils.GetPodsFromApplicationsPS(opts.Name)
 		if err != nil {
 			return err
 		}
@@ -48,44 +47,6 @@ func (p *PodmanApplication) Start(opts appTypes.StartOptions) error {
 	}
 
 	return p.confirmAndStartPods(podsToStart, opts.AutoYes, opts.SkipLogs)
-}
-
-func (p *PodmanApplication) getPodsFromApplicationsPS(appName string) ([]types.Pod, error) {
-	var pods []types.Pod //nolint: prealloc
-	appClient, err := catalogClient.NewApplicationClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create application client: %w", err)
-	}
-
-	app, err := cliutils.GetAppByName(appClient, appName)
-	if err != nil {
-		return nil, err
-	}
-
-	psResp, err := appClient.GetApplicationPS(app.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch application: %w", err)
-	}
-
-	// add components to the list of pods
-	for _, resp := range psResp.Components {
-		pod := types.Pod{
-			ID:   resp.PodName,
-			Name: resp.PodName,
-		}
-		pods = append(pods, pod)
-	}
-
-	// add services to the list of pods
-	for _, resp := range psResp.Services {
-		pod := types.Pod{
-			ID:   resp.PodName,
-			Name: resp.PodName,
-		}
-		pods = append(pods, pod)
-	}
-
-	return pods, nil
 }
 
 // Start implementation helper methods.
