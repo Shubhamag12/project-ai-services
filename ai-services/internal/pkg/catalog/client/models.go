@@ -14,8 +14,6 @@ type ListApplicationsParams struct {
 
 // DeleteApplicationParams holds optional query parameters for deleting applications.
 type DeleteApplicationParams struct {
-	// SkipCleanup skips deleting application data when true. Default: false
-	SkipCleanup bool
-	// AutoYes automatically answers 'yes' to prompts when true. Default: false
-	AutoYes bool
+	// KeepData preserves underlying data (volumes of databases/service resources) when true. Default: false
+	KeepData bool
 }

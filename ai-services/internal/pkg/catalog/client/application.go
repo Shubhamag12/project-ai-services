@@ -100,18 +100,15 @@ func (c *ApplicationClient) GetApplicationPS(id string) (*types.ApplicationPSRes
 //
 //	client := NewApplicationClient()
 //	err := client.DeleteApplication("rag", &DeleteApplicationParams{
-//	    SkipCleanup: true,
+//	    KeepData: true,
 //	})
 func (c *ApplicationClient) DeleteApplication(id string, params *DeleteApplicationParams) error {
 	req := c.httpClient.R().
 		SetHeader("Authorization", "Bearer "+c.client.AccessToken())
 
 	if params != nil {
-		if params.SkipCleanup {
-			req.SetQueryParam("skip_cleanup", "true")
-		}
-		if params.AutoYes {
-			req.SetQueryParam("auto_yes", "true")
+		if params.KeepData {
+			req.SetQueryParam("keep_data", "true")
 		}
 	}
 

@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -119,6 +120,8 @@ func buildDeleteFlagValidator() *flagvalidator.FlagValidator {
 }
 
 func deleteApplication(appName string) error {
+	appDir := filepath.Join(utils.GetApplicationsPath(), filepath.Base(appName))
+	appExists := utils.FileExists(appDir)
 	appClient, err := catalogClient.NewApplicationClient()
 	if err != nil {
 		return fmt.Errorf("failed to create application client: %w", err)
@@ -128,9 +131,34 @@ func deleteApplication(appName string) error {
 		return err
 	}
 
+	pods, err := cliUtils.GetPodsFromApplicationsPS(appName)
+	if err != nil {
+		return err
+	}
+
+	logPodsToBeDeleted(appName, pods)
+	podsExists := len(pods) != 0
+
+	if !podsExists {
+		logger.Infof("No pods found for application: %s\n", appName)
+
+		return nil
+	}
+
+	if !autoYes {
+		confirmDelete, err := deleteConfirmation(appName, podsExists, appExists, skipCleanup)
+		if err != nil {
+			return err
+		}
+		if !confirmDelete {
+			logger.Infoln("Deletion cancelled")
+
+			return nil
+		}
+	}
+
 	deleteParams := catalogClient.DeleteApplicationParams{
-		SkipCleanup: skipCleanup,
-		AutoYes:     autoYes,
+		KeepData: skipCleanup,
 	}
 
 	if err := appClient.DeleteApplication(app.ID, &deleteParams); err != nil {
@@ -140,4 +168,34 @@ func deleteApplication(appName string) error {
 	logger.Infof("Application %s deleted successfully.", appName)
 
 	return nil
+}
+
+func logPodsToBeDeleted(appName string, pods []types.Pod) {
+	logger.Infof("Found %d pods for given applicationName: %s.\n", len(pods), appName)
+	logger.Infoln("Below are the list of pods to be deleted")
+	for _, pod := range pods {
+		logger.Infof("\t-> %s\n", pod.Name)
+	}
+}
+
+func deleteConfirmation(appName string, podsExists, appExists, skipCleanup bool) (bool, error) {
+	var confirmActionPrompt string
+	if podsExists && appExists && !skipCleanup {
+		confirmActionPrompt = "Are you sure you want to delete the above pods and application data? "
+	} else if podsExists {
+		confirmActionPrompt = "Are you sure you want to delete the above pods? "
+	} else if appExists && !skipCleanup {
+		confirmActionPrompt = "Are you sure you want to delete the application data? "
+	} else {
+		logger.Infof("Application %s does not exist", appName)
+
+		return false, nil
+	}
+
+	confirmDelete, err := utils.ConfirmAction(confirmActionPrompt)
+	if err != nil {
+		return confirmDelete, fmt.Errorf("failed to take user input: %w", err)
+	}
+
+	return confirmDelete, nil
 }
