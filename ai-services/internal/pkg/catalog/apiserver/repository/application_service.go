@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
@@ -264,8 +265,15 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, id uuid.UUID
 func (s *ApplicationService) CreateApplication(ctx context.Context, req apimodels.CreateApplicationRequest) (*apimodels.CreateApplicationResponse, error) {
 	// Phase 1: Validate request and check for duplicate application name
 	existingApp, err := s.appRepo.GetByName(ctx, req.Name)
-	if err == nil && existingApp != nil {
-		return nil, fmt.Errorf("application with name '%s' already exists", req.Name)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("failed to check for existing application: %w", err)
+	}
+	if existingApp != nil {
+		// Application with this name already exists - return conflict error
+		return nil, &ValidationError{
+			Code:    http.StatusConflict,
+			Message: fmt.Sprintf("application with name '%s' already exists", req.Name),
+		}
 	}
 
 	// Phase 2: Validate request payload
