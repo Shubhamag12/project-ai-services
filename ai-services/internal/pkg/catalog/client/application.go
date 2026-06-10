@@ -11,12 +11,9 @@ import (
 
 // API route constants for application endpoints.
 const (
-	// ListApplicationsRoute is the endpoint for listing all applications.
-	ListApplicationsRoute = "/api/v1/applications"
-	// GetApplicationPSRoute is the endpoint for getting application process status.
-	GetApplicationPSRoute = "/api/v1/applications/%s/ps"
-	// DeleteApplicationRoute is the endpoint for deleting an application.
-	DeleteApplicationRoute = "/api/v1/applications/%s"
+	listApplicationsRoute  = "/api/v1/applications"
+	getApplicationPSRoute  = "/api/v1/applications/%s/ps"
+	deleteApplicationRoute = "/api/v1/applications/%s"
 )
 
 // ApplicationClient provides methods for interacting with the applications API.
@@ -71,7 +68,7 @@ func (c *ApplicationClient) ListApplications(params *ListApplicationsParams) (*t
 		}
 	}
 
-	resp, err := req.Get(ListApplicationsRoute)
+	resp, err := req.Get(listApplicationsRoute)
 	if err != nil {
 		return nil, fmt.Errorf("list applications: %w", err)
 	}
@@ -90,7 +87,7 @@ func (c *ApplicationClient) GetApplicationPS(id string) (*types.ApplicationPSRes
 	resp, err := c.httpClient.R().
 		SetHeader("Authorization", "Bearer "+c.client.AccessToken()).
 		SetResult(&result).
-		Get(fmt.Sprintf(GetApplicationPSRoute, id))
+		Get(fmt.Sprintf(getApplicationPSRoute, id))
 	if err != nil {
 		return nil, fmt.Errorf("get application ps: %w", err)
 	}
@@ -122,7 +119,7 @@ func (c *ApplicationClient) DeleteApplication(id string, params *DeleteApplicati
 		}
 	}
 
-	resp, err := req.Delete(fmt.Sprintf(DeleteApplicationRoute, id))
+	resp, err := req.Delete(fmt.Sprintf(deleteApplicationRoute, id))
 	if err != nil {
 		return fmt.Errorf("delete application: %w", err)
 	}
