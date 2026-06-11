@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"net"
 	"os"
@@ -574,6 +577,73 @@ func getPodmanURIAsRoot() (string, error) {
 		"unix:///run/user/%s/podman/podman.sock",
 		u.Uid,
 	), nil
+}
+
+// ExtractTarGz extracts a tar.gz file to a destination directory.
+func ExtractTarGz(srcFile, destDir string) error {
+	file, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = gzr.Close()
+	}()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := extractTarEntry(tr, header, destDir); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// extractTarEntry extracts a single tar entry.
+func extractTarEntry(tr *tar.Reader, header *tar.Header, destDir string) error {
+	target := filepath.Join(destDir, header.Name)
+
+	switch header.Typeflag {
+	case tar.TypeDir:
+		if err := os.MkdirAll(target, constants.DirPerm); err != nil {
+			return err
+		}
+	case tar.TypeReg:
+		if err := os.MkdirAll(filepath.Dir(target), constants.DirPerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.Create(target)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = outFile.Close()
+		}()
+
+		if _, err := io.Copy(outFile, tr); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ErrorResponse represents an error response.
