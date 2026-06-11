@@ -2,7 +2,6 @@ package application
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -120,8 +119,6 @@ func buildDeleteFlagValidator() *flagvalidator.FlagValidator {
 }
 
 func deleteApplication(appName string) error {
-	appDir := filepath.Join(utils.GetApplicationsPath(), filepath.Base(appName))
-	appExists := utils.FileExists(appDir)
 	appClient, err := catalogClient.NewApplicationClient()
 	if err != nil {
 		return fmt.Errorf("failed to create application client: %w", err)
@@ -130,23 +127,12 @@ func deleteApplication(appName string) error {
 	if err != nil {
 		return err
 	}
-
-	pods, err := cliUtils.GetPodsFromApplicationsPS(appName)
-	if err != nil {
-		return err
-	}
-
-	logPodsToBeDeleted(appName, pods)
-	podsExists := len(pods) != 0
-
-	if !podsExists {
-		logger.Infof("No pods found for application: %s\n", appName)
-
-		return nil
+	if app == nil {
+		return fmt.Errorf("application not found: %s", appName)
 	}
 
 	if !autoYes {
-		confirmDelete, err := deleteConfirmation(appName, podsExists, appExists, skipCleanup)
+		confirmDelete, err := deleteConfirmation()
 		if err != nil {
 			return err
 		}
@@ -179,21 +165,26 @@ func deleteApplication(appName string) error {
 // waitForApplicationDeletion polls the application status until it's fully deleted.
 func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appName string) error {
 	const (
-		pollInterval = 3 * time.Second
-		maxAttempts  = 10
+		pollInterval = 5 * time.Second
+		maxAttempts  = 12
 	)
 
 	for range maxAttempts {
-		// Check if application still exists
-		_, err := cliUtils.GetAppByName(appClient, appName)
+		// Check if application still exists via API
+		app, err := cliUtils.GetAppByName(appClient, appName)
 		if err != nil {
-			// If application is not found, it's been deleted
-			// Check if pods are also gone
-			pods, podErr := cliUtils.GetPodsFromApplicationsPS(appName)
-			if podErr != nil || len(pods) == 0 {
-				// Application and pods are deleted
+			// If application is not found, it's been successfully deleted
+			if err.Error() == fmt.Sprintf("application with name '%s' not found", appName) {
 				return nil
 			}
+
+			return fmt.Errorf("failed to fetch application: %w", err)
+		}
+
+		// If application exists, check its status
+		if app != nil {
+			logger.Infof("Application status: %s, message: %s\n", app.Status, app.Message)
+			// Application still exists, continue polling
 		}
 
 		// Wait before next poll
@@ -203,28 +194,8 @@ func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appN
 	return fmt.Errorf("timeout waiting for application deletion after %v", maxAttempts*pollInterval)
 }
 
-func logPodsToBeDeleted(appName string, pods []types.Pod) {
-	logger.Infof("Found %d pods for given applicationName: %s.\n", len(pods), appName)
-	logger.Infoln("Below are the list of pods to be deleted")
-	for _, pod := range pods {
-		logger.Infof("\t-> %s\n", pod.Name)
-	}
-}
-
-func deleteConfirmation(appName string, podsExists, appExists, skipCleanup bool) (bool, error) {
-	var confirmActionPrompt string
-	if podsExists && appExists && !skipCleanup {
-		confirmActionPrompt = "Are you sure you want to delete the above pods and application data? "
-	} else if podsExists {
-		confirmActionPrompt = "Are you sure you want to delete the above pods? "
-	} else if appExists && !skipCleanup {
-		confirmActionPrompt = "Are you sure you want to delete the application data? "
-	} else {
-		logger.Infof("Application %s does not exist", appName)
-
-		return false, nil
-	}
-
+func deleteConfirmation() (bool, error) {
+	confirmActionPrompt := "Are you sure you want to delete the application? "
 	confirmDelete, err := utils.ConfirmAction(confirmActionPrompt)
 	if err != nil {
 		return confirmDelete, fmt.Errorf("failed to take user input: %w", err)
