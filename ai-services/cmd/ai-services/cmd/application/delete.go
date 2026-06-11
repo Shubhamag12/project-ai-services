@@ -165,9 +165,42 @@ func deleteApplication(appName string) error {
 		return fmt.Errorf("failed to delete application: %w", err)
 	}
 
+	// Poll to verify deletion is complete
+	logger.Infof("Waiting for application %s to be deleted...\n", appName)
+	if err := waitForApplicationDeletion(appClient, appName); err != nil {
+		return fmt.Errorf("failed to verify application deletion: %w", err)
+	}
+
 	logger.Infof("Application %s deleted successfully.", appName)
 
 	return nil
+}
+
+// waitForApplicationDeletion polls the application status until it's fully deleted.
+func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appName string) error {
+	const (
+		pollInterval = 3 * time.Second
+		maxAttempts  = 10
+	)
+
+	for range maxAttempts {
+		// Check if application still exists
+		_, err := cliUtils.GetAppByName(appClient, appName)
+		if err != nil {
+			// If application is not found, it's been deleted
+			// Check if pods are also gone
+			pods, podErr := cliUtils.GetPodsFromApplicationsPS(appName)
+			if podErr != nil || len(pods) == 0 {
+				// Application and pods are deleted
+				return nil
+			}
+		}
+
+		// Wait before next poll
+		time.Sleep(pollInterval)
+	}
+
+	return fmt.Errorf("timeout waiting for application deletion after %v", maxAttempts*pollInterval)
 }
 
 func logPodsToBeDeleted(appName string, pods []types.Pod) {
