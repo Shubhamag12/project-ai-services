@@ -153,7 +153,7 @@ func deleteApplication(appName string) error {
 
 	// Poll to verify deletion is complete
 	logger.Infof("Waiting for application %s to be deleted...\n", appName)
-	if err := waitForApplicationDeletion(appClient, appName); err != nil {
+	if err := waitForApplicationDeletion(appClient, app.ID, app.Name); err != nil {
 		return fmt.Errorf("failed to verify application deletion: %w", err)
 	}
 
@@ -163,7 +163,7 @@ func deleteApplication(appName string) error {
 }
 
 // waitForApplicationDeletion polls the application status until it's fully deleted.
-func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appName string) error {
+func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appID, appName string) error {
 	const (
 		pollInterval = 5 * time.Second
 		maxAttempts  = 12
@@ -171,7 +171,7 @@ func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appN
 
 	for range maxAttempts {
 		// Check if application still exists via API
-		app, err := cliUtils.GetAppByName(appClient, appName)
+		app, err := appClient.GetApplication(appID)
 		if err != nil {
 			// If application is not found, it's been successfully deleted
 			if err.Error() == fmt.Sprintf("application with name '%s' not found", appName) {

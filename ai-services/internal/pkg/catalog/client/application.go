@@ -11,9 +11,9 @@ import (
 
 // API route constants for application endpoints.
 const (
-	listApplicationsRoute  = "/api/v1/applications"
-	getApplicationPSRoute  = "/api/v1/applications/%s/ps"
-	deleteApplicationRoute = "/api/v1/applications/%s"
+	listApplicationsRoute = "/api/v1/applications"
+	getApplicationPSRoute = "/api/v1/applications/%s/ps"
+	getApplicationRoute   = "/api/v1/applications/%s"
 )
 
 // ApplicationClient provides methods for interacting with the applications API.
@@ -119,7 +119,7 @@ func (c *ApplicationClient) DeleteApplication(id string, params *DeleteApplicati
 		}
 	}
 
-	resp, err := req.Delete(fmt.Sprintf(deleteApplicationRoute, id))
+	resp, err := req.Delete(fmt.Sprintf(getApplicationRoute, id))
 	if err != nil {
 		return fmt.Errorf("delete application: %w", err)
 	}
@@ -129,6 +129,24 @@ func (c *ApplicationClient) DeleteApplication(id string, params *DeleteApplicati
 	}
 
 	return nil
+}
+
+// GetApplication retrieves full details for a specific application by ID.
+func (c *ApplicationClient) GetApplication(id string) (*types.Application, error) {
+	var result types.Application
+	resp, err := c.httpClient.R().
+		SetHeader("Authorization", "Bearer "+c.client.AccessToken()).
+		SetResult(&result).
+		Get(fmt.Sprintf(getApplicationRoute, id))
+	if err != nil {
+		return nil, fmt.Errorf("get application: %w", err)
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("get application: server returned HTTP %d: %s", resp.StatusCode(), utils.ParseErrorResponse(resp))
+	}
+
+	return &result, nil
 }
 
 // Made with Bob
