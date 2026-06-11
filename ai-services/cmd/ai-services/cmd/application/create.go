@@ -260,6 +260,12 @@ func buildFlagValidator() *flagvalidator.FlagValidator {
 
 // validateTemplateFlag validates the template flag.
 func validateTemplateFlag(cmd *cobra.Command) error {
+	// Skip template validation in experimental mode for podman runtime
+	// In experimental mode, templates are validated against catalog API
+	if experimentalCreate && vars.RuntimeFactory.GetRuntimeType() == types.RuntimeTypePodman {
+		return nil
+	}
+
 	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
 	if err := tp.AppTemplateExist(templateName); err != nil {
 		return err
@@ -395,7 +401,7 @@ func createApp(appName string) error {
 	if err != nil {
 		logger.Warningf("Failed to marshal payload for debugging: %v\n", err)
 	} else {
-		logger.Infof("=== CLI REQUEST PAYLOAD ===\n%s\n", string(payloadJSON))
+		logger.Infof("CLI REQUEST PAYLOAD:\n%s\n", string(payloadJSON))
 	}
 
 	// 7. Create application via catalog API
@@ -694,7 +700,7 @@ func selectProviderFromDeployOptions(compDeployOpt catalogTypes.DeployOptionsCom
 
 	// Special logic for LLM and reranker component types - prefer Spyre acceleration
 	if compDeployOpt.Type == "llm" || compDeployOpt.Type == "reranker" {
-		// Default to vllm-spyre for LLM/reranker if available (Spyre acceleration)
+		// Default to vllm-spyre for LLM/reranker if available
 		for _, p := range compDeployOpt.Providers {
 			if p.ID == "vllm-spyre" {
 				return p.ID, make(map[string]string)
