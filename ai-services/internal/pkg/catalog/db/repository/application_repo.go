@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -338,7 +339,12 @@ func (r *applicationRepo) GetByName(ctx context.Context, name string) (*models.A
 	}
 	defer rows.Close()
 
-	return collectApplication(rows)
+	app, err := collectApplication(rows)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	return app, nil
 }
 
 // Insert creates a new application in the database.
