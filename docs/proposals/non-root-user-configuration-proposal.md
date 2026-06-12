@@ -80,34 +80,79 @@ drwxr-xr-x. 6 root root 360 Apr 27 11:53 ..
 - Containers could not access Spyre cards, causing crashes
 
 ### Solution Implemented
-Created custom SELinux policy modules:
+Created custom SELinux policy modules that are automatically applied during bootstrap:
 
 **1. VFIO Device Access Policy (`vllm_vfio_policy`)**:
+- Traditional `.te` format policy
 - Allows `container_t` type to access `vfio_device_t` devices
 - Grants minimal required permissions: `ioctl`, `open`, `read`, `write`, `getattr`
-- Sets persistent file context rules: `/dev/vfio/*` → `vfio_device_t`
+- Applied during `ai-services bootstrap` for Spyre card access
+- Automatically reloads udev rules after policy installation to apply SELinux labels to existing devices
 
-**2. Podman Socket Access Policy (`podman_socket_policy`)**:
-- Allows containers with `container_t` type to access the Podman socket
-- Enables rootless container operations with proper SELinux context
-- Required for non-root users to manage containers securely
+**2. Non-Root Podman Socket Access Policy (`ai_services_nonroot_policy`)**:
+- CIL (Common Intermediate Language) format policy generated using udica tool
+- Creates custom `ai_services_nonroot.process` label that inherits from `container` and `net_container` templates
+- Comprehensive permissions including:
+  - VFIO device access (block and character files)
+  - Non-root Podman socket access (`user_tmp_t` socket files at `/run/user/<uid>/podman/podman.sock`)
+  - Container runtime connection (`container_runtime_t` Unix stream socket)
+  - Read-only access to `/sys/` filesystem (`sysfs_t`)
+  - Uses `unconfined_r` role for non-root container operations
+- Applied during `ai-services bootstrap`
+
+### Policy Generation and Format
+The non-root Podman socket policy was generated using the **udica** tool:
+```bash
+podman inspect container > container.json
+udica -j container.json container_policy.cil
+```
+
+The generated policy uses CIL format and inherits from udica's base templates:
+- `/usr/share/udica/templates/base_container.cil` - Base container permissions
+- `/usr/share/udica/templates/net_container.cil` - Network container permissions
+
+### Policy Application Process
+SELinux policies are applied using different methods based on their format:
+
+**For Traditional `.te` Format (VFIO policy)**:
+1. **Policy Compilation**: The policy source (`.te` file) is compiled into a module (`.mod`) using `checkmodule`
+2. **Policy Packaging**: The module is packaged into a policy package (`.pp`) using `semodule_package`
+3. **Policy Installation**: The package is installed using `semodule -i`, with automatic removal of existing versions if present
+4. **Device Labeling**: Udev rules are reloaded to apply SELinux labels to existing devices
+
+**For CIL Format (Non-root Podman socket policy)**:
+1. **Policy Writing**: The CIL policy content is written to a `.cil` file
+2. **Direct Installation**: The policy is installed directly using `semodule -i` with udica template dependencies:
+   ```bash
+   semodule -i ai_services_nonroot_policy.cil \
+     /usr/share/udica/templates/base_container.cil \
+     /usr/share/udica/templates/net_container.cil
+   ```
+3. **Automatic Removal**: Existing versions are automatically removed before installation if present
+
+All policies are applied automatically during the bootstrap process and persist across system reboots.
 
 ### Configuration Changes
 **Container Templates** (`vllm-server.yaml.tmpl`):
-- Added explicit `container_t` SELinux type at container level (not Pod level)
-- Only containers using Spyre cards receive the security context
+- Containers can use custom SELinux label `ai_services_nonroot.process`
+- Only containers using Spyre cards or requiring Podman socket access receive custom security contexts
 - CPU-only containers use default context
 
 ### Verification
 ```bash
-# Check policy installation
-sudo semodule -l | grep vllm_vfio_policy
+# Check policy installations
+sudo semodule -l | grep -E 'vllm_vfio_policy|ai_services_nonroot_policy'
 
-# Verify file context rules
-sudo semanage fcontext -l | grep vfio
-
-# Check device labels
+# Verify VFIO device labels
 ls -Z /dev/vfio/
+
+# Check SELinux status
+getenforce
+sestatus
+
+# Verify policy modules are loaded
+sudo semodule -l | grep vllm_vfio_policy           # VFIO device access
+sudo semodule -l | grep ai_services_nonroot_policy # Non-root Podman socket
 ```
 
 ---
@@ -115,13 +160,11 @@ ls -Z /dev/vfio/
 ## 2. Podman Socket Configuration
 
 ### Problem
-Podman must be configured differently based on execution context:
-- Root user (no sudo): System-wide podman socket
-- Sudo user: User-specific podman socket for the actual user
+Non-root users need proper Podman socket configuration to run containers. When bootstrap is run with sudo, the Podman socket must be configured for the actual user (not root).
 
 ### Error
 ```
-Error: unable to connect to Podman: unix:///run/podman/podman.sock: connect: permission denied
+Error: unable to connect to Podman: unix:///run/user/<uid>/podman/podman.sock: connect: permission denied
 ```
 
 ### Solution Implemented
@@ -129,20 +172,17 @@ Error: unable to connect to Podman: unix:///run/podman/podman.sock: connect: per
 
 **Logic**:
 ```
-If running as root AND not via sudo:
-  → systemctl enable podman.socket --now
-  
-If running via sudo (SUDO_USER environment variable set):
+When running via sudo (SUDO_USER environment variable set):
   → systemctl enable podman.socket --now --machine=username@.host --user
 ```
 
 **Detection Method**:
-- `os.Geteuid()` - Check effective user ID
-- `SUDO_USER` environment variable - Identify original user when using sudo
+- `SUDO_USER` environment variable - Identify the actual user when bootstrap is run with sudo
+- Configures user-specific Podman socket at `/run/user/<uid>/podman/podman.sock`
 
 **Additional Configuration**:
-- **Socket Resolution**: Automatically resolves the correct Podman socket path for both root and non-root scenarios
-- **Auth File Path**: Resolves Podman auth file path based on user context (root vs non-root)
+- **Socket Resolution**: Automatically resolves the correct Podman socket path for non-root user
+- **Auth File Path**: Resolves Podman auth file path for non-root user context
 - **Rootless Support**: Full support for rootless Podman operations with proper socket access
 
 ---
@@ -271,7 +311,7 @@ Error: unable to start container "f72329a97540825bb753ec41806021c9fd15890ae54f68
 
 **Usage**:
 ```bash
-ai-services catalog configure --http-port 8443
+ai-services catalog configure --https-port 8443
 ```
 
 **Rationale**:
@@ -283,10 +323,19 @@ ai-services catalog configure --http-port 8443
 ## Security Considerations
 
 ### SELinux Policy
-- **Minimal Permissions**: Only grants necessary VFIO device access
-- **Targeted Policy**: Applies only to `container_t`, not system-wide
-- **Persistent Configuration**: File context rules survive reboots
-- **Audit Trail**: SELinux logs all access attempts
+- **Minimal Permissions**: Each policy grants only the necessary permissions for its specific purpose:
+  - VFIO policy: Only device access operations (ioctl, open, read, write, getattr)
+  - Non-root Podman socket policy: Comprehensive but targeted permissions for container operations, VFIO access, socket communication, and read-only sysfs access
+- **Custom Process Label**: CIL policy creates dedicated process label `ai_services_nonroot.process` for non-root containers
+- **Template Inheritance**: CIL policy inherits from udica's proven templates:
+  - `base_container.cil` - Core container permissions
+  - `net_container.cil` - Network container permissions
+- **Automatic Application**: Policies are automatically compiled/written, packaged (for .te), and installed during bootstrap
+- **Persistent Configuration**: Policies survive reboots and are reinstalled if already present
+- **Audit Trail**: SELinux logs all access attempts for security monitoring
+- **Device Labeling**: VFIO policy automatically triggers udev rule reload to label existing devices
+- **Format Flexibility**: Supports both traditional `.te` format and modern CIL format policies
+- **Rootless Role**: Uses `unconfined_r` role for non-root container operations
 
 ### Container Security
 - **Container-Level Context**: Security applied per container, not per Pod
@@ -308,25 +357,33 @@ ai-services catalog configure --http-port 8443
 # Check for SELinux denials
 sudo ausearch -m avc -ts recent
 
-# Verify policy installation
-sudo semodule -l | grep vllm_vfio_policy
+# Verify policy installations
+sudo semodule -l | grep -E 'vllm_vfio_policy|ai_services_nonroot_policy'
 
-# Check file contexts
+# Check individual policies
+sudo semodule -l | grep vllm_vfio_policy           # VFIO device access policy
+sudo semodule -l | grep ai_services_nonroot_policy # Non-root Podman socket policy
+
+# Check VFIO device labels
 sudo ls -Z /dev/vfio/
+
+# Check non-root Podman socket label
+ls -Z /run/user/$(id -u)/podman/podman.sock
 
 # View SELinux status
 getenforce
 sestatus
+
+# Check if SELinux is blocking container operations
+sudo ausearch -m avc -c container_t -ts recent
 ```
 
 ### Podman Diagnostics
 ```bash
-# Check socket status
-systemctl status podman.socket
+# Check non-root socket status
 systemctl --user status podman.socket
 
-# Verify socket file
-ls -l /run/podman/podman.sock
+# Verify non-root socket file
 ls -l /run/user/$(id -u)/podman/podman.sock
 
 # Test connection
