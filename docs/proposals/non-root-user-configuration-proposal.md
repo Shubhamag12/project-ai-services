@@ -38,7 +38,7 @@ This document outlines the configuration changes and system requirements impleme
    # Enable lingering to keep user services running
    sudo loginctl enable-linger <username>
    ```
-5. While running `ai-services catalog configure` cmd, make sure to add `--https-port 8443`, as 443 is a privileged port. For PowerVS environments, use `--https-port 6443` along with a custom domain configuration, as 6443 is the only available port option for non-root users on PowerVS.
+5. While running `ai-services catalog configure` cmd, make sure to add `--https-port 8443`, as 443 is a privileged port. For PowerVS environments, use `--https-port 6443` along with a custom domain configuration, as 6443 is one of the available port option for non-root users on PowerVS.
 
 **Why This Is Required:**
 - Group membership changes require a new login session
