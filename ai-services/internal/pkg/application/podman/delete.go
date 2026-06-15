@@ -3,40 +3,35 @@ package podman
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"time"
 
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
+	cliUtils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
-	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
 
-// Delete removes an application and its associated resources.
+// Delete removes an application and its associated resources using the catalog API.
 func (p *PodmanApplication) Delete(_ context.Context, opts appTypes.DeleteOptions) error {
-	appDir := filepath.Join(utils.GetApplicationsPath(), filepath.Base(opts.Name))
-	appExists := utils.FileExists(appDir)
-
-	pods, err := p.runtime.ListPods(map[string][]string{
-		"label": {fmt.Sprintf("ai-services.io/application=%s", opts.Name)},
-	})
+	// Create application client
+	appClient, err := catalogClient.NewApplicationClient()
 	if err != nil {
-		return fmt.Errorf("failed to list pods: %w", err)
-	}
-	podsExists := len(pods) != 0
-
-	if !podsExists {
-		logger.Infof("No pods found for application: %s\n", opts.Name)
-
-		return nil
+		return fmt.Errorf("failed to create application client: %w", err)
 	}
 
-	// print relevant app pod status
-	p.logPodsToBeDeleted(opts.Name, pods)
+	// Validate application exists via catalog API
+	app, err := cliUtils.GetAppByName(appClient, opts.Name)
+	if err != nil {
+		return err
+	}
+	if app == nil {
+		return fmt.Errorf("application not found: %s", opts.Name)
+	}
 
+	// Confirm deletion if not auto-yes
 	if !opts.AutoYes {
-		confirmDelete, err := p.deleteConfirmation(opts.Name, podsExists, appExists, opts.SkipCleanup)
+		confirmDelete, err := p.deleteConfirmation()
 		if err != nil {
 			return err
 		}
@@ -47,43 +42,29 @@ func (p *PodmanApplication) Delete(_ context.Context, opts appTypes.DeleteOption
 		}
 	}
 
-	logger.Infoln("Proceeding with deletion...")
-
-	if err := p.podsDeletion(pods); err != nil {
-		return err
+	// Delete application via catalog API
+	deleteParams := catalogClient.DeleteApplicationParams{
+		KeepData: opts.SkipCleanup,
 	}
 
-	if appExists && !opts.SkipCleanup {
-		if err := p.appDataDeletion(appDir); err != nil {
-			return err
-		}
+	if err := appClient.DeleteApplication(app.ID, &deleteParams); err != nil {
+		return fmt.Errorf("failed to delete application: %w", err)
 	}
+
+	// Poll to verify deletion is complete
+	logger.Infof("Waiting for application %s to be deleted...\n", opts.Name)
+	if err := p.waitForApplicationDeletion(appClient, app.ID, app.Name); err != nil {
+		return fmt.Errorf("failed to verify application deletion: %w", err)
+	}
+
+	logger.Infof("Application %s deleted successfully.", opts.Name)
 
 	return nil
 }
 
-func (p *PodmanApplication) logPodsToBeDeleted(appName string, pods []types.Pod) {
-	logger.Infof("Found %d pods for given applicationName: %s.\n", len(pods), appName)
-	logger.Infoln("Below are the list of pods to be deleted")
-	for _, pod := range pods {
-		logger.Infof("\t-> %s\n", pod.Name)
-	}
-}
-
-func (p *PodmanApplication) deleteConfirmation(appName string, podsExists, appExists, skipCleanup bool) (bool, error) {
-	var confirmActionPrompt string
-	if podsExists && appExists && !skipCleanup {
-		confirmActionPrompt = "Are you sure you want to delete the above pods and application data? "
-	} else if podsExists {
-		confirmActionPrompt = "Are you sure you want to delete the above pods? "
-	} else if appExists && !skipCleanup {
-		confirmActionPrompt = "Are you sure you want to delete the application data? "
-	} else {
-		logger.Infof("Application %s does not exist", appName)
-
-		return false, nil
-	}
-
+// deleteConfirmation prompts the user to confirm deletion.
+func (p *PodmanApplication) deleteConfirmation() (bool, error) {
+	confirmActionPrompt := "Are you sure you want to delete the application? "
 	confirmDelete, err := utils.ConfirmAction(confirmActionPrompt)
 	if err != nil {
 		return confirmDelete, fmt.Errorf("failed to take user input: %w", err)
@@ -92,37 +73,34 @@ func (p *PodmanApplication) deleteConfirmation(appName string, podsExists, appEx
 	return confirmDelete, nil
 }
 
-func (p *PodmanApplication) podsDeletion(pods []types.Pod) error {
-	var errors []string
+// waitForApplicationDeletion polls the application status until it's fully deleted.
+func (p *PodmanApplication) waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appID, appName string) error {
+	const (
+		pollInterval = 5 * time.Second
+		maxAttempts  = 12
+	)
 
-	for _, pod := range pods {
-		logger.Infof("Deleting pod: %s\n", pod.Name)
+	for range maxAttempts {
+		// Check if application still exists via API
+		app, err := appClient.GetApplication(appID)
+		if err != nil {
+			// If application is not found, it's been successfully deleted
+			if err.Error() == fmt.Sprintf("application with name '%s' not found", appName) {
+				return nil
+			}
 
-		if err := p.runtime.DeletePod(pod.ID, utils.BoolPtr(true)); err != nil {
-			errors = append(errors, fmt.Sprintf("pod %s: %v", pod.Name, err))
-
-			continue
+			return fmt.Errorf("failed to fetch application: %w", err)
 		}
 
-		logger.Infof("Successfully removed pod: %s\n", pod.Name)
+		// If application exists, check its status
+		if app != nil {
+			logger.Infof("Application status: %s, message: %s\n", app.Status, app.Message)
+			// Application still exists, continue polling
+		}
+
+		// Wait before next poll
+		time.Sleep(pollInterval)
 	}
 
-	// Aggregate errors at the end
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to remove pods: \n%s", strings.Join(errors, "\n"))
-	}
-
-	return nil
-}
-
-func (p *PodmanApplication) appDataDeletion(appDir string) error {
-	logger.Infoln("Cleaning up application data")
-
-	if err := os.RemoveAll(appDir); err != nil {
-		return fmt.Errorf("failed to delete application data: %w", err)
-	}
-
-	logger.Infoln("Application data cleaned up successfully")
-
-	return nil
+	return fmt.Errorf("timeout waiting for application deletion after %v", maxAttempts*pollInterval)
 }
