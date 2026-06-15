@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	cliutils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
@@ -14,19 +15,20 @@ import (
 
 // Start starts a stopped application.
 func (p *PodmanApplication) Start(opts appTypes.StartOptions) error {
-	var pods []types.Pod
-	var err error
-	// if experimental flag is set, get pods from applications-ps
-	if !opts.Experimental {
-		pods, err = p.fetchPodsFromRuntime(opts.Name)
-		if err != nil {
-			return err
-		}
-	} else {
-		pods, err = cliutils.GetPodsFromApplicationsPS(opts.Name)
-		if err != nil {
-			return err
-		}
+	// Validate application exists via catalog API
+	appClient, err := catalogClient.NewApplicationClient()
+	if err != nil {
+		return fmt.Errorf("failed to create application client: %w", err)
+	}
+
+	if _, err := cliutils.GetAppByName(appClient, opts.Name); err != nil {
+		return err
+	}
+
+	// Get pods from applications-ps
+	pods, err := cliutils.GetPodsFromApplicationsPS(opts.Name)
+	if err != nil {
+		return err
 	}
 
 	if len(pods) == 0 {
@@ -50,17 +52,6 @@ func (p *PodmanApplication) Start(opts appTypes.StartOptions) error {
 }
 
 // Start implementation helper methods.
-func (p *PodmanApplication) fetchPodsFromRuntime(appName string) ([]types.Pod, error) {
-	pods, err := p.runtime.ListPods(map[string][]string{
-		"label": {fmt.Sprintf("ai-services.io/application=%s", appName)},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %w", err)
-	}
-
-	return pods, nil
-}
-
 func (p *PodmanApplication) fetchPodsToStart(pods []types.Pod, podNames []string) ([]types.Pod, error) {
 	if len(podNames) > 0 {
 		return p.filterPodsByNameForStart(pods, podNames)
