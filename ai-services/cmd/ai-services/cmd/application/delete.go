@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -163,7 +164,7 @@ func deleteApplication(appName string) error {
 }
 
 // waitForApplicationDeletion polls the application status until it's fully deleted.
-func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appID, appName string) error {
+func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appID string) error {
 	const (
 		pollInterval = 5 * time.Second
 		maxAttempts  = 12
@@ -173,8 +174,8 @@ func waitForApplicationDeletion(appClient *catalogClient.ApplicationClient, appI
 		// Check if application still exists via API
 		app, err := appClient.GetApplication(appID)
 		if err != nil {
-			// If application is not found, it's been successfully deleted
-			if err.Error() == fmt.Sprintf("application with name '%s' not found", appName) {
+			// If application is not found (HTTP 404), it's been successfully deleted
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 				return nil
 			}
 
