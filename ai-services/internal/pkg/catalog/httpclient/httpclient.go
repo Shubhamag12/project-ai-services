@@ -65,13 +65,8 @@ type HTTPClient struct {
 }
 
 // New creates a new HTTPClient targeting the given server URL.
-func New(serverURL string) *HTTPClient {
-	return NewWithInsecure(serverURL, false)
-}
-
-// NewWithInsecure creates a new HTTPClient targeting the given server URL.
 // If insecure is true, TLS certificate verification will be skipped.
-func NewWithInsecure(serverURL string, insecure bool) *HTTPClient {
+func New(serverURL string, insecure bool) *HTTPClient {
 	transport := &http.Transport{}
 
 	if insecure {

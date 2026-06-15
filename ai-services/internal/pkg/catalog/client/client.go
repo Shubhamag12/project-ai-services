@@ -45,6 +45,7 @@ type UserInfo struct {
 // New creates a Client using credentials loaded from the local config file.
 // It refreshes the access token only when it is about to expire (within
 // tokenRefreshSkew of its expiry time); otherwise the stored token is reused.
+// The insecure flag from stored credentials determines whether TLS verification is performed.
 func New() (*Client, error) {
 	creds, err := config.Load()
 	if err != nil {
@@ -53,7 +54,7 @@ func New() (*Client, error) {
 
 	c := &Client{
 		serverURL:  creds.ServerURL,
-		httpClient: httpclient.NewWithInsecure(creds.ServerURL, creds.Insecure),
+		httpClient: httpclient.New(creds.ServerURL, creds.Insecure),
 		creds:      creds,
 	}
 
@@ -95,7 +96,7 @@ func (c *Client) accessTokenNeedsRefresh() bool {
 func NewWithLogin(serverURL, username, password string, insecure bool) (*Client, error) {
 	c := &Client{
 		serverURL:  serverURL,
-		httpClient: httpclient.NewWithInsecure(serverURL, insecure),
+		httpClient: httpclient.New(serverURL, insecure),
 	}
 
 	resp, err := c.Login(username, password)
