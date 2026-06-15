@@ -3,12 +3,11 @@ package restore
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/project-ai-services/ai-services/internal/pkg/catalog/httpclient"
+	"github.com/go-resty/resty/v2"
 	catalogTypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
@@ -144,13 +143,13 @@ func readDocumentFiles(docsDir string) ([]interface{}, error) {
 
 // DigitizeRestoreClient wraps the HTTP client for digitize restore operations.
 type DigitizeRestoreClient struct {
-	client *httpclient.HTTPClient
+	client *resty.Client
 }
 
 // NewDigitizeRestoreClient creates a new digitize restore client.
 func NewDigitizeRestoreClient(serviceURL string) *DigitizeRestoreClient {
 	return &DigitizeRestoreClient{
-		client: httpclient.New(serviceURL, true),
+		client: resty.New().SetBaseURL(serviceURL),
 	}
 }
 
@@ -184,15 +183,17 @@ func (c *DigitizeRestoreClient) CallImportAPI(payload map[string]interface{}) er
 
 	// Make the API call using the reusable HTTP client
 	logger.Infof("Sending import request to: /v1/import\n", 0)
-	err := c.client.Do(httpclient.Request{
-		Method:   http.MethodPost,
-		Endpoint: "/v1/import",
-		Payload:  payload,
-		Out:      &importResponse,
-	})
+	resp, err := c.client.R().
+		SetBody(payload).
+		SetResult(&importResponse).
+		Post("/v1/import")
 
 	if err != nil {
 		return fmt.Errorf("failed to call import API: %w", err)
+	}
+
+	if resp.IsError() {
+		return fmt.Errorf("import API returned HTTP %d: %s", resp.StatusCode(), resp.String())
 	}
 
 	// Log import results

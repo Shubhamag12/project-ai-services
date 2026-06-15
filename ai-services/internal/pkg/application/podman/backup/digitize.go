@@ -3,12 +3,11 @@ package backup
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/project-ai-services/ai-services/internal/pkg/catalog/httpclient"
+	"github.com/go-resty/resty/v2"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 )
 
@@ -51,13 +50,13 @@ type DigitizeExportPagination struct {
 
 // DigitizeBackupClient wraps the HTTP client for digitize backup operations.
 type DigitizeBackupClient struct {
-	client *httpclient.HTTPClient
+	client *resty.Client
 }
 
 // NewDigitizeBackupClient creates a new digitize backup client.
 func NewDigitizeBackupClient(serviceURL string) *DigitizeBackupClient {
 	return &DigitizeBackupClient{
-		client: httpclient.New(serviceURL, true),
+		client: resty.New().SetBaseURL(serviceURL),
 	}
 }
 
@@ -68,16 +67,17 @@ func (c *DigitizeBackupClient) CallExportAPI() (*DigitizeExportResponse, error) 
 	var exportResponse DigitizeExportResponse
 
 	logger.Infof("Sending export request to: /v1/export?limit=-1\n", 0)
-	err := c.client.Do(httpclient.Request{
-		Method:   http.MethodGet,
-		Endpoint: "/v1/export",
-		Query: map[string]string{
-			"limit": exportAllRecordsLimit,
-		},
-		Out: &exportResponse,
-	})
+	resp, err := c.client.R().
+		SetQueryParam("limit", exportAllRecordsLimit).
+		SetResult(&exportResponse).
+		Get("/v1/export")
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to call export API: %w", err)
+	}
+
+	if resp.IsError() {
+		return nil, fmt.Errorf("export API returned HTTP %d: %s", resp.StatusCode(), resp.String())
 	}
 
 	return &exportResponse, nil
