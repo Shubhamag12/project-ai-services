@@ -5,17 +5,11 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application"
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
-	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
-	"github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
-	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 	"github.com/spf13/cobra"
 )
 
-var (
-	stopPodNames     []string
-	experimentalStop bool
-)
+var stopPodNames []string
 
 var stopCmd = &cobra.Command{
 	Use:   "stop [name]",
@@ -45,20 +39,6 @@ Note: Supported for podman runtime only.
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
-		// When experimentalStop is true and runtime is podman, validate application name using catalog API
-		// For openshift runtime, always use the older/stable code path regardless of experimental flag
-		if experimentalStop && rt == types.RuntimeTypePodman {
-			appClient, err := catalogClient.NewApplicationClient()
-			if err != nil {
-				return fmt.Errorf("failed to create application client: %w", err)
-			}
-			if _, err := utils.GetAppByName(appClient, applicationName); err != nil {
-				return err
-			}
-
-			return nil
-		}
-
 		// Create application instance using factory
 		factory := application.NewFactory(rt)
 		app, err := factory.Create(applicationName)
@@ -67,10 +47,9 @@ Note: Supported for podman runtime only.
 		}
 
 		opts := appTypes.StopOptions{
-			Name:         applicationName,
-			PodNames:     stopPodNames,
-			AutoYes:      autoYes,
-			Experimental: experimentalStop,
+			Name:     applicationName,
+			PodNames: stopPodNames,
+			AutoYes:  autoYes,
 		}
 
 		return app.Stop(opts)
@@ -80,5 +59,4 @@ Note: Supported for podman runtime only.
 func init() {
 	stopCmd.Flags().StringSlice("pod", []string{}, "Specific pod name(s) to stop (optional)\nCan be specified multiple times: --pod pod1 --pod pod2\nOr comma-separated: --pod pod1,pod2")
 	stopCmd.Flags().BoolVarP(&autoYes, "yes", "y", false, "Automatically accept all confirmation prompts (default=false)")
-	stopCmd.Flags().BoolVar(&experimentalStop, "experimental", false, "Include experimental application stop")
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	appTypes "github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	cliutils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
@@ -13,19 +14,13 @@ import (
 
 // Stop stops a running application.
 func (p *PodmanApplication) Stop(opts appTypes.StopOptions) error {
-	pods, err := p.listApplicationPods(opts)
-	if err != nil {
+	// Validate application exists
+	if err := p.validateApplication(opts.Name); err != nil {
 		return err
 	}
 
-	if len(pods) == 0 {
-		logger.Infof("No pods found with given application: %s\n", opts.Name)
-
-		return nil
-	}
-
-	// Filter pods based on provided pod names
-	podsToStop, err := p.fetchPodsToStop(pods, opts.PodNames, opts.Name)
+	// Get and filter pods
+	podsToStop, err := p.getPodsToStop(opts)
 	if err != nil {
 		return err
 	}
@@ -36,13 +31,51 @@ func (p *PodmanApplication) Stop(opts appTypes.StopOptions) error {
 		return nil
 	}
 
-	logger.Infof("Found %d pods for given applicationName: %s.\n", len(podsToStop), opts.Name)
+	// Confirm and stop pods
+	return p.confirmAndStopPods(podsToStop, opts.AutoYes)
+}
+
+// validateApplication validates that the application exists via catalog API.
+func (p *PodmanApplication) validateApplication(appName string) error {
+	appClient, err := catalogClient.NewApplicationClient()
+	if err != nil {
+		return fmt.Errorf("failed to create application client: %w", err)
+	}
+
+	if _, err := cliutils.GetAppByName(appClient, appName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getPodsToStop retrieves and filters pods for the application.
+func (p *PodmanApplication) getPodsToStop(opts appTypes.StopOptions) ([]types.Pod, error) {
+	// Get pods from applications-ps (catalog API)
+	pods, err := cliutils.GetPodsFromApplicationsPS(opts.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pods) == 0 {
+		logger.Infof("No pods found with given application: %s\n", opts.Name)
+
+		return nil, nil
+	}
+
+	// Filter pods based on provided pod names
+	return p.fetchPodsToStop(pods, opts.PodNames)
+}
+
+// confirmAndStopPods displays pods, confirms with user, and stops them.
+func (p *PodmanApplication) confirmAndStopPods(podsToStop []types.Pod, autoYes bool) error {
+	logger.Infof("Found %d pods.\n", len(podsToStop))
 	logger.Infoln("Below pods will be stopped:")
 	for _, pod := range podsToStop {
 		logger.Infof("\t-> %s\n", pod.Name)
 	}
 
-	if !opts.AutoYes {
+	if !autoYes {
 		confirmStop, err := utils.ConfirmAction("Are you sure you want to stop the above pods? ")
 		if err != nil {
 			return fmt.Errorf("failed to take user input: %w", err)
@@ -60,23 +93,7 @@ func (p *PodmanApplication) Stop(opts appTypes.StopOptions) error {
 	return p.stopPods(podsToStop)
 }
 
-// listApplicationPods retrieves pods for the given application.
-func (p *PodmanApplication) listApplicationPods(opts appTypes.StopOptions) ([]types.Pod, error) {
-	if !opts.Experimental {
-		pods, err := p.runtime.ListPods(map[string][]string{
-			"label": {fmt.Sprintf("ai-services.io/application=%s", opts.Name)},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list pods: %w", err)
-		}
-
-		return pods, nil
-	}
-
-	return cliutils.GetPodsFromApplicationsPS(opts.Name)
-}
-
-func (p *PodmanApplication) fetchPodsToStop(pods []types.Pod, podNames []string, appName string) ([]types.Pod, error) {
+func (p *PodmanApplication) fetchPodsToStop(pods []types.Pod, podNames []string) ([]types.Pod, error) {
 	var podsToStop []types.Pod
 	if len(podNames) > 0 {
 		// Filter pods
