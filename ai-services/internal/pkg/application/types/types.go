@@ -67,6 +67,7 @@ type InfoOptions struct {
 
 // LogsOptions contains parameters for displaying application logs.
 type LogsOptions struct {
+	ApplicationName   string
 	PodName           string
 	ContainerNameOrID string
 }

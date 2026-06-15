@@ -4,11 +4,23 @@ import (
 	"fmt"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/application/types"
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
+	cliUtils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 )
 
 // Logs displays logs from an application pod.
 func (p *PodmanApplication) Logs(opts types.LogsOptions) error {
+	// Validate application exists via catalog API
+	appClient, err := catalogClient.NewApplicationClient()
+	if err != nil {
+		return fmt.Errorf("failed to create application client: %w", err)
+	}
+
+	if _, err := cliUtils.GetAppByName(appClient, opts.ApplicationName); err != nil {
+		return err
+	}
+
 	logger.Warningln("Press Ctrl+C to exit the logs and return to the terminal.")
 	logger.Infof("Fetching logs for application pod: %s", opts.PodName)
 
