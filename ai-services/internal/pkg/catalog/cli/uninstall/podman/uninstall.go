@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	catalogClient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	catalogConstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
+	cliUtils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
@@ -26,6 +28,11 @@ func UninstallCatalog(ctx context.Context, autoYes, skipCleanup bool) error {
 
 	pods, err := validateCatalogExists(rt)
 	if err != nil || len(pods) == 0 {
+		return err
+	}
+
+	// Check if any applications are still running
+	if err := checkRunningApplications(); err != nil {
 		return err
 	}
 
@@ -58,6 +65,31 @@ func validateCatalogExists(rt *podman.PodmanClient) ([]types.Pod, error) {
 	logger.Infof("Found %d catalog pod(s)\n", len(pods))
 
 	return pods, nil
+}
+
+// checkRunningApplications verifies that no applications are currently running.
+// Returns an error if any applications are found, preventing catalog uninstall.
+func checkRunningApplications() error {
+	logger.Infoln("Checking for running applications...")
+
+	// Initialize application client
+	appClient, err := catalogClient.NewApplicationClient()
+	if err != nil {
+		return fmt.Errorf("failed to create application client: %w", err)
+	}
+
+	applications, err := cliUtils.FetchApplications(appClient, "")
+	if err != nil {
+		return fmt.Errorf("failed to fetch applications: %w", err)
+	}
+
+	if len(applications) == 0 {
+		logger.Infoln("No running applications found. Proceeding with catalog uninstall...")
+
+		return nil
+	}
+
+	return fmt.Errorf("cannot uninstall catalog while running applications are present")
 }
 
 // confirmDeletion prompts the user to confirm deletion and logs pods to be deleted.
