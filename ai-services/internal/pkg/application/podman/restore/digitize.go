@@ -150,7 +150,7 @@ type DigitizeRestoreClient struct {
 // NewDigitizeRestoreClient creates a new digitize restore client.
 func NewDigitizeRestoreClient(serviceURL string) *DigitizeRestoreClient {
 	return &DigitizeRestoreClient{
-		client: httpclient.New(serviceURL),
+		client: httpclient.New(serviceURL, true),
 	}
 }
 
