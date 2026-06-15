@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strconv"
 
@@ -29,8 +30,17 @@ func NewApplicationClient() (*ApplicationClient, error) {
 		return nil, fmt.Errorf("failed to initialize client: %w", err)
 	}
 
+	restyClient := resty.New().SetBaseURL(client.ServerURL())
+
+	// Configure TLS settings based on the insecure flag from credentials
+	if client.creds.Insecure {
+		restyClient.SetTLSClientConfig(&tls.Config{
+			InsecureSkipVerify: true,
+		})
+	}
+
 	return &ApplicationClient{
-		httpClient: resty.New().SetBaseURL(client.ServerURL()),
+		httpClient: restyClient,
 		client:     client,
 	}, nil
 }
