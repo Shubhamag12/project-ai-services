@@ -9,14 +9,6 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
 
-// HTTP header constants.
-const (
-	headerAuthorization = "Authorization"
-	headerContentType   = "Content-Type"
-	bearerPrefix        = "Bearer "
-	contentTypeJSON     = "application/json"
-)
-
 // API route constants for application endpoints.
 const (
 	applicationsRoute       = "/api/v1/applications"
@@ -158,9 +150,7 @@ func (c *ApplicationClient) GetApplication(id string) (*types.Application, error
 // It accepts a CreateApplicationRequest with catalog ID, name, services, and components configuration.
 func (c *ApplicationClient) CreateApplication(req *models.CreateApplicationRequest) (*models.CreateApplicationResponse, error) {
 	var result models.CreateApplicationResponse
-	resp, err := c.httpClient.R().
-		SetHeader(headerAuthorization, bearerPrefix+c.client.AccessToken()).
-		SetHeader(headerContentType, contentTypeJSON).
+	resp, err := c.client.HTTPClient().R().
 		SetBody(req).
 		SetResult(&result).
 		Post(applicationsRoute)
@@ -181,8 +171,7 @@ func (c *ApplicationClient) CreateApplication(req *models.CreateApplicationReque
 // It returns available providers and dependency rules for the service and its components.
 func (c *ApplicationClient) GetServiceDeployOptions(serviceID string) (*types.DeployOptionsService, error) {
 	var result types.DeployOptionsService
-	resp, err := c.httpClient.R().
-		SetHeader(headerAuthorization, bearerPrefix+c.client.AccessToken()).
+	resp, err := c.client.HTTPClient().R().
 		SetResult(&result).
 		Get(fmt.Sprintf(svcDeployOptionsRoute, serviceID))
 	if err != nil {
@@ -200,8 +189,7 @@ func (c *ApplicationClient) GetServiceDeployOptions(serviceID string) (*types.De
 // It returns available providers and dependency rules for all services in the architecture.
 func (c *ApplicationClient) GetArchitectureDeployOptions(architectureID string) (*types.DeployOptionsArchitecture, error) {
 	var result types.DeployOptionsArchitecture
-	resp, err := c.httpClient.R().
-		SetHeader(headerAuthorization, bearerPrefix+c.client.AccessToken()).
+	resp, err := c.client.HTTPClient().R().
 		SetResult(&result).
 		Get(fmt.Sprintf(archDeployOptionsRoute, architectureID))
 	if err != nil {
@@ -218,8 +206,7 @@ func (c *ApplicationClient) GetArchitectureDeployOptions(architectureID string) 
 // GetComponentProviderParams retrieves the parameter schema for a specific component provider.
 func (c *ApplicationClient) GetComponentProviderParams(componentType, providerID string) (map[string]any, error) {
 	var result map[string]any
-	resp, err := c.httpClient.R().
-		SetHeader(headerAuthorization, bearerPrefix+c.client.AccessToken()).
+	resp, err := c.client.HTTPClient().R().
 		SetResult(&result).
 		Get(fmt.Sprintf(compProviderParamsRoute, componentType, providerID))
 	if err != nil {

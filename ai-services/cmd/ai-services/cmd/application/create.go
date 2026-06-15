@@ -389,7 +389,34 @@ func createApp(appName string) error {
 	logger.Infof("Application creation initiated (ID: %s)\n", resp.ID)
 
 	// 5. Poll for application status
-	return pollApplicationStatus(appClient, appName)
+	if err := pollApplicationStatus(appClient, appName); err != nil {
+		return err
+	}
+
+	// 6. Print next steps after successful deployment
+	return printNextSteps(appName)
+}
+
+// printNextSteps prints the next steps after successful application deployment.
+func printNextSteps(appName string) error {
+	// Create template provider
+	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
+
+	// Get runtime instance
+	rt, err := vars.RuntimeFactory.Create(appName)
+	if err != nil {
+		logger.Infof("Unable to create runtime for next steps: %v\n", err)
+
+		return nil
+	}
+
+	// Print next steps
+	if err := helpers.PrintNextSteps(tp, rt, appName, templateName); err != nil {
+		// Don't fail the overall create if we cannot print next steps
+		logger.Infof("Failed to display next steps: %v\n", err)
+	}
+
+	return nil
 }
 
 // checkApplicationExists checks if an application with the given name already exists.
@@ -760,12 +787,8 @@ func findUserSpecifiedProvider(compDeployOpt catalogTypes.DeployOptionsComponent
 	return "", nil
 }
 
-// findSpyreProvider finds vllm-spyre provider for LLM and reranker components.
+// findSpyreProvider finds vllm-spyre provider if available for the component.
 func findSpyreProvider(compDeployOpt catalogTypes.DeployOptionsComponent) string {
-	if compDeployOpt.Type != "llm" && compDeployOpt.Type != "reranker" {
-		return ""
-	}
-
 	for _, p := range compDeployOpt.Providers {
 		if p.ID == "vllm-spyre" {
 			return p.ID
