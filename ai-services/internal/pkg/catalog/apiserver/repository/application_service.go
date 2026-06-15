@@ -227,13 +227,13 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, id uuid.UUID
 	if app == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 	if app.CreatedBy != userID {
 		return nil, &ValidationError{
 			Code:    http.StatusForbidden,
-			Message: "user does not own this application",
+			Message: ErrMsgUserNotOwner,
 		}
 	}
 	err = s.appRepo.UpdateDeploymentName(ctx, id, newName)
@@ -247,7 +247,7 @@ func (s *ApplicationService) UpdateApplication(ctx context.Context, id uuid.UUID
 	if updatedApp == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 
@@ -272,7 +272,7 @@ func (s *ApplicationService) CreateApplication(ctx context.Context, req apimodel
 		// Application with this name already exists - return conflict error
 		return nil, &ValidationError{
 			Code:    http.StatusConflict,
-			Message: fmt.Sprintf("application with name '%s' already exists", req.Name),
+			Message: fmt.Sprintf(ErrMsgApplicationNameExists, req.Name),
 		}
 	}
 
@@ -496,7 +496,7 @@ func (s *ApplicationService) GetApplicationByID(ctx context.Context, id uuid.UUI
 	if app == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 	// Build complete response with services and components
@@ -623,21 +623,21 @@ func (s *ApplicationService) DeleteApplication(ctx context.Context, id uuid.UUID
 	if app == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 
 	if app.CreatedBy != user {
 		return nil, &ValidationError{
 			Code:    http.StatusForbidden,
-			Message: "user does not own this application",
+			Message: ErrMsgUserNotOwner,
 		}
 	}
 
 	if app.Status == models.ApplicationStatusDeleting {
 		return nil, &ValidationError{
 			Code:    http.StatusConflict,
-			Message: "application is already being deleted",
+			Message: ErrMsgApplicationAlreadyDeleting,
 		}
 	}
 
@@ -735,7 +735,7 @@ func (s *ApplicationService) GetApplicationResources(ctx context.Context, id uui
 	if app == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 
@@ -1004,7 +1004,7 @@ func (s *ApplicationService) ApplicationsPs(ctx context.Context, appID uuid.UUID
 	if app == nil {
 		return nil, &ValidationError{
 			Code:    http.StatusNotFound,
-			Message: "application does not exist",
+			Message: ErrMsgApplicationNotFound,
 		}
 	}
 
