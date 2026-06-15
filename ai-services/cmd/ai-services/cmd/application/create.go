@@ -399,7 +399,29 @@ func createApp(appName string) error {
 	logger.Infof("Application creation initiated (ID: %s)\n", resp.ID)
 
 	// 5. Poll for application status
-	return pollApplicationStatus(appClient, appName)
+	if err := pollApplicationStatus(appClient, appName); err != nil {
+		return err
+	}
+
+	logger.Infoln("-------")
+
+	// 6. Print next steps
+	tp := templates.NewEmbedTemplateProvider(&assets.ApplicationFS)
+	rt, err := vars.RuntimeFactory.Create("")
+	if err != nil {
+		logger.Infof("failed to create runtime for next steps: %v\n", err)
+
+		return nil //nolint:nilerr // intentionally swallow error for non-critical step
+	}
+
+	if err := helpers.PrintNextSteps(tp, rt, appName, templateName); err != nil {
+		// do not want to fail the overall create if we cannot print next steps
+		logger.Infof("failed to display next steps: %v\n", err)
+
+		return nil //nolint:nilerr // intentionally swallow error for non-critical step
+	}
+
+	return nil
 }
 
 // checkApplicationExists checks if an application with the given name already exists.
