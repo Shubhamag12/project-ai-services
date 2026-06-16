@@ -168,13 +168,22 @@ func generateArgParams(passwordHash string, httpsPort int) (map[string]string, e
 
 	// Determine auth file path
 	// Read and encode auth file content for secret
+	// If auth file doesn't exist, use empty content
 	authFilePath, err := utils.GetAuthFilePath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get auth file path: %w", err)
 	}
+
 	authFileContent, err := os.ReadFile(authFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read auth file from %s: %w", authFilePath, err)
+		if os.IsNotExist(err) {
+			// Auth file doesn't exist - user hasn't logged into podman
+			logger.Warningln("Podman auth file not found. Deployment may fail since deployment may require pulling images.")
+			logger.Warningln("Run 'podman login' to authenticate with container registries before deploying services.")
+			authFileContent = []byte{}
+		} else {
+			return nil, fmt.Errorf("failed to read auth file from %s: %w", authFilePath, err)
+		}
 	}
 
 	// Base64 encode the auth file content for Kubernetes secret
