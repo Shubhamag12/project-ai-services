@@ -551,7 +551,7 @@ func printNextSteps(app *catalogTypes.Application) error {
 			continue
 		}
 
-		err = printNextStepsMD(tmpls, params, service.CatalogID)
+		err = printNextStepsMD(tmpls, params, service.CatalogID, application.Name)
 		if err != nil {
 			logger.Warningf("Failed to render next steps for service '%s': %v\n", service.CatalogID, err)
 		}
@@ -561,10 +561,10 @@ func printNextSteps(app *catalogTypes.Application) error {
 }
 
 // printNextStepsMD renders and prints the next.md template for a service.
-func printNextStepsMD(tmpls map[string]*template.Template, params map[string]string, serviceID string) error {
+func printNextStepsMD(tmpls map[string]*template.Template, params map[string]string, serviceID, appName string) error {
 	tmpl, ok := tmpls["next.md"]
 	if !ok {
-		// next.md is optional, so just return without error
+		// next.md doesn't exist for this service, return nil
 		return nil
 	}
 
@@ -574,9 +574,14 @@ func printNextStepsMD(tmpls map[string]*template.Template, params map[string]str
 	}
 
 	value := rendered.String()
+
+	// Print the template content if available
 	if strings.TrimSpace(value) != "" {
 		logger.Infof(value)
 	}
+
+	// Print the info command for all services
+	logger.Infof("\n- For detailed endpoint information, use: `ai-services application info %s --runtime podman`\n", appName)
 
 	return nil
 }
