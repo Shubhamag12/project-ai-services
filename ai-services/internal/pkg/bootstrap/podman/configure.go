@@ -37,12 +37,17 @@ func (p *PodmanBootstrap) Configure() error {
 		return err
 	}
 
-	// 3. Configure SMT level to 2 and persist via systemd
+	// 3. Configure user groups (sentient group)
+	if err := ensureUsergroupConfigured(ctx); err != nil {
+		return err
+	}
+
+	// 4. Configure SMT level to 2 and persist via systemd
 	if err := ensureSMTConfigured(ctx); err != nil {
 		return err
 	}
 
-	// 4. Configure SELinux policy for Podman socket access
+	// 5. Configure SELinux policy for Podman socket access
 	if err := ensureSELinuxPolicyConfigured(ctx); err != nil {
 		return err
 	}

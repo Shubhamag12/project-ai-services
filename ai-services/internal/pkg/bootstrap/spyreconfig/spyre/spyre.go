@@ -73,7 +73,6 @@ func RunChecks() []check.CheckResult {
 		checkMemlockConf(),
 		checkNofileConf(),
 		checkVfioPciConf(),
-		checkUserGroup(),
 		checkVfioModule(),
 		checkVfioAccessPermission(),
 		checkSELinuxVFIOPolicy(),
@@ -416,16 +415,6 @@ func checkVfioPciConf() *check.ConfigurationFileCheck {
 	return confCheck
 }
 
-// checkUserGroup validates user group configuration.
-func checkUserGroup() *check.ConfigCheck {
-	userGroupCheck := check.NewConfigCheck("User group configuration")
-
-	status := utils.GroupExists(sentientGroup)
-	userGroupCheck.AddConfig(sentientGroup, status)
-	userGroupCheck.SetStatus(status)
-
-	return userGroupCheck
-}
 
 // checkVfioModule validates VFIO kernel module is loaded.
 func checkVfioModule() *check.Check {

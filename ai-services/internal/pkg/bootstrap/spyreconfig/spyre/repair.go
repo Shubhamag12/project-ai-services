@@ -42,7 +42,7 @@ type RepairResult struct {
 
 // Repair attempts to fix all failed Spyre checks.
 func Repair(checks []check.CheckResult) []RepairResult {
-	const checkResultsLen = 11
+	const checkResultsLen = 10
 	results := make([]RepairResult, 0, checkResultsLen)
 
 	// Create a map for easy lookup.
@@ -57,10 +57,10 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	results = append(results, fixNofileConf(checkMap))
 	results = append(results, fixUdevRule(checkMap))
 	results = append(results, fixVFIOPCIConf(checkMap))
-	userGroupResult := fixUserGroup(checkMap)
-	results = append(results, userGroupResult)
 	results = append(results, fixVFIOModule(checkMap))
-	results = append(results, fixVFIOPermissions(checkMap, userGroupResult))
+	// Note: User group configuration moved to generic bootstrap flow
+	// fixVFIOPermissions no longer depends on userGroupResult
+	results = append(results, fixVFIOPermissions(checkMap, RepairResult{}))
 	results = append(results, fixSystemdUserSliceLimits(checkMap))
 	results = append(results, fixSELinuxVFIOPolicy())
 	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
@@ -346,31 +346,6 @@ func appendMissingModules(confCheck *check.ConfigurationFileCheck, checkName str
 	for key, attr := range confCheck.Attributes {
 		if !attr.Status {
 			if err := utils.AppendToFile(confCheck.FilePath, "\n"+key); err != nil {
-				return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-			}
-		}
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed}
-}
-
-// fixUserGroup repairs user group configuration.
-func fixUserGroup(checkMap map[string]check.CheckResult) RepairResult {
-	checkName := "User group configuration"
-	chk, ok := getCheckFromMap(checkMap, checkName)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped}
-	}
-
-	configCheck, ok := chk.(*check.ConfigCheck)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Message: "Invalid check type"}
-	}
-
-	// Create missing groups.
-	for groupName, status := range configCheck.Configs {
-		if !status {
-			if err := utils.CreateGroup(groupName); err != nil {
 				return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
 			}
 		}

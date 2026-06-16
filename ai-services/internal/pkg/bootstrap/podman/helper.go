@@ -35,11 +35,6 @@ func configureSpyre() error {
 	// Run validation and repair
 	allPassed := runValidationAndRepair()
 
-	// Add current user to sentient group
-	if err := configureUsergroup(); err != nil {
-		return err
-	}
-
 	if !allPassed {
 		return fmt.Errorf("some Spyre configuration checks still failed after repair")
 	}
@@ -118,6 +113,11 @@ func logRepairResults(results []spyre.RepairResult) {
 }
 
 func configureUsergroup() error {
+	// Ensure sentient group exists first
+	if err := ensureSentientGroupExists(); err != nil {
+		return err
+	}
+
 	username := os.Getenv("SUDO_USER")
 	if username == "" {
 		// Fallback to current user if not running via sudo
@@ -134,8 +134,32 @@ func configureUsergroup() error {
 	cmd := exec.Command("bash", "-c", cmd_str)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create sentient group and add current user to the sentient group. Error: %w, output: %s", err, string(out))
+		return fmt.Errorf("failed to add current user to the sentient group. Error: %w, output: %s", err, string(out))
 	}
+
+	return nil
+}
+
+// ensureSentientGroupExists creates the sentient group if it doesn't exist.
+func ensureSentientGroupExists() error {
+	// Check if sentient group already exists
+	cmd := exec.Command("getent", "group", "sentient")
+	if err := cmd.Run(); err == nil {
+		// Group already exists
+		logger.Infoln("sentient group already exists", logger.VerbosityLevelDebug)
+
+		return nil
+	}
+
+	// Create the sentient group
+	logger.Infoln("Creating sentient group", logger.VerbosityLevelDebug)
+	cmd = exec.Command("groupadd", "sentient")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create sentient group: %w, output: %s", err, string(out))
+	}
+
+	logger.Infoln("sentient group created successfully", logger.VerbosityLevelDebug)
 
 	return nil
 }
@@ -360,6 +384,22 @@ func ensureSpyreConfigured(ctx context.Context) error {
 		return err
 	}
 	s.Stop("Spyre cards configuration validated successfully.")
+
+	return nil
+}
+
+// ensureUsergroupConfigured ensures sentient group exists and adds current user to it.
+// This is required for both Spyre and non-Spyre setups to handle ulimit configurations.
+func ensureUsergroupConfigured(ctx context.Context) error {
+	s := spinner.New("Configuring user groups")
+	s.Start(ctx)
+
+	if err := configureUsergroup(); err != nil {
+		s.Fail("failed to configure user groups")
+
+		return err
+	}
+	s.Stop("User groups configured successfully")
 
 	return nil
 }
