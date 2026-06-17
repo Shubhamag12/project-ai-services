@@ -3,7 +3,7 @@
 {{- end }}
 {{- if ne .API_URL "" }}
 
-- Use the Digitize API for programmatic document upload at {{ .API_URL }}.
+- Use the {{ .SERVICE_NAME }} API for programmatic document upload at {{ .API_URL }}.
 {{- end }}
 
 - These documents are consumed by Q&A service.
