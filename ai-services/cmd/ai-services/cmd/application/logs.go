@@ -48,27 +48,8 @@ Arguments
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
-		// When legacyLogs is true and runtime is podman, use the older/stable code path
-		// For openshift runtime, always use the older/stable code path regardless of legacy flag
-		if legacyLogs && rt == types.RuntimeTypePodman {
-			// Create application instance using factory
-			factory := application.NewFactory(rt)
-			app, err := factory.Create(applicationName)
-			if err != nil {
-				return fmt.Errorf("failed to create application instance: %w", err)
-			}
-
-			opts := appTypes.LogsOptions{
-				PodName:           podName,
-				ContainerNameOrID: containerNameOrID,
-			}
-
-			return app.Logs(opts)
-		}
-
-		// Default: use new implementation via catalog
-		// For openshift runtime, always use the older/stable code path
-		if rt == types.RuntimeTypePodman {
+		// For podman runtime with default mode
+		if !legacyLogs && rt == types.RuntimeTypePodman {
 			appClient, err := catalogClient.NewApplicationClient()
 			if err != nil {
 				return fmt.Errorf("failed to create application client: %w", err)
@@ -76,11 +57,9 @@ Arguments
 			if _, err := utils.GetAppByName(appClient, applicationName); err != nil {
 				return err
 			}
-
-			return nil
 		}
 
-		// OpenShift runtime uses the older implementation
+		// Create application instance using factory
 		factory := application.NewFactory(rt)
 		app, err := factory.Create(applicationName)
 		if err != nil {

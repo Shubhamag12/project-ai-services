@@ -58,8 +58,6 @@ Note: Supported for podman runtime only.
 			if _, err := utils.GetAppByName(appClient, applicationName); err != nil {
 				return err
 			}
-
-			return nil
 		}
 
 		// Create application instance using factory
