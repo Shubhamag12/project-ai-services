@@ -17,7 +17,7 @@ import (
 var (
 	podName           string
 	containerNameOrID string
-	experimentalLogs  bool
+	legacyLogs        bool
 )
 
 var logsCmd = &cobra.Command{
@@ -48,9 +48,27 @@ Arguments
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
-		// When experimentalLogs is true and runtime is podman, validate application name using catalog API
-		// For openshift runtime, always use the older/stable code path regardless of experimental flag
-		if experimentalLogs && rt == types.RuntimeTypePodman {
+		// When legacyLogs is true and runtime is podman, use the older/stable code path
+		// For openshift runtime, always use the older/stable code path regardless of legacy flag
+		if legacyLogs && rt == types.RuntimeTypePodman {
+			// Create application instance using factory
+			factory := application.NewFactory(rt)
+			app, err := factory.Create(applicationName)
+			if err != nil {
+				return fmt.Errorf("failed to create application instance: %w", err)
+			}
+
+			opts := appTypes.LogsOptions{
+				PodName:           podName,
+				ContainerNameOrID: containerNameOrID,
+			}
+
+			return app.Logs(opts)
+		}
+
+		// Default: use new implementation via catalog
+		// For openshift runtime, always use the older/stable code path
+		if rt == types.RuntimeTypePodman {
 			appClient, err := catalogClient.NewApplicationClient()
 			if err != nil {
 				return fmt.Errorf("failed to create application client: %w", err)
@@ -62,7 +80,7 @@ Arguments
 			return nil
 		}
 
-		// Create application instance using factory
+		// OpenShift runtime uses the older implementation
 		factory := application.NewFactory(rt)
 		app, err := factory.Create(applicationName)
 		if err != nil {
@@ -83,7 +101,7 @@ func init() {
 }
 
 func initLogsCommonFlags() {
-	logsCmd.Flags().BoolVar(&experimentalLogs, "experimental", false, "Include experimental application logs")
+	logsCmd.Flags().BoolVar(&legacyLogs, "legacy", false, "Use legacy application logs implementation")
 	logsCmd.Flags().StringVar(&podName, appFlags.Logs.Pod, "", "Pod name to show logs from (required)")
 	logsCmd.Flags().StringVar(&containerNameOrID, appFlags.Logs.Container, "", "Container logs to show logs from (Optional)")
 	_ = logsCmd.MarkFlagRequired(appFlags.Logs.Pod)
