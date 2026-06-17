@@ -154,17 +154,15 @@ func setupPodman() error {
 	euid := os.Geteuid()
 	sudoUser := os.Getenv("SUDO_USER")
 
-	// if running as root and not via sudo, enable system-wide podman socket
-	// else, enable user podman socket for the sudo user
+	// Enable podman services based on user context
+	var err error
 	if euid == 0 && sudoUser == "" {
-		if err := systemctl("enable", "podman.socket", "--now"); err != nil {
-			return fmt.Errorf("failed to enable podman socket: %w", err)
-		}
+		err = enableRootPodmanServices()
 	} else {
-		machineArg := fmt.Sprintf("--machine=%s@.host", sudoUser)
-		if err := systemctl("enable", "podman.socket", "--now", machineArg, "--user"); err != nil {
-			return fmt.Errorf("failed to enable podman socket: %w", err)
-		}
+		err = enableUserPodmanServices(sudoUser)
+	}
+	if err != nil {
+		return err
 	}
 
 	logger.Debugln("Waiting for podman socket to be ready...")
@@ -175,6 +173,31 @@ func setupPodman() error {
 	}
 
 	logger.Infof("Podman configured successfully.")
+
+	return nil
+}
+
+// enableRootPodmanServices enables system-wide podman services for root user.
+func enableRootPodmanServices() error {
+	if err := systemctl("enable", "podman.socket", "--now"); err != nil {
+		return fmt.Errorf("failed to enable podman socket: %w", err)
+	}
+	if err := systemctl("enable", "podman-restart.service", "--now"); err != nil {
+		return fmt.Errorf("failed to enable podman-restart service: %w", err)
+	}
+
+	return nil
+}
+
+// enableUserPodmanServices enables user-specific podman services for non-root user.
+func enableUserPodmanServices(sudoUser string) error {
+	machineArg := fmt.Sprintf("--machine=%s@.host", sudoUser)
+	if err := systemctl("enable", "podman.socket", "--now", machineArg, "--user"); err != nil {
+		return fmt.Errorf("failed to enable podman socket: %w", err)
+	}
+	if err := systemctl("enable", "podman-restart.service", "--now", "--user"); err != nil {
+		return fmt.Errorf("failed to enable podman-restart service: %w", err)
+	}
 
 	return nil
 }
@@ -385,22 +408,6 @@ func ensureSELinuxPolicyConfigured(ctx context.Context) error {
 		return err
 	}
 	s.Stop("SELinux Podman socket policy configured successfully")
-
-	return nil
-}
-
-// ensurePodmanRestartServiceEnabled enables and starts the podman-restart.service
-// to automatically restart pods with restart policy on system boot.
-func ensurePodmanRestartServiceEnabled(ctx context.Context) error {
-	s := spinner.New("Enabling podman-restart service")
-	s.Start(ctx)
-
-	if err := systemctl("enable", "podman-restart.service", "--now"); err != nil {
-		s.Fail("failed to enable podman-restart service")
-
-		return err
-	}
-	s.Stop("Podman-restart service enabled successfully")
 
 	return nil
 }
