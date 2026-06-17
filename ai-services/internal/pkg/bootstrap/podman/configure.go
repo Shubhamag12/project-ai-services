@@ -47,12 +47,17 @@ func (p *PodmanBootstrap) Configure() error {
 		return err
 	}
 
-	// 5. Configure SMT level to 2 and persist via systemd
+	// 5. Configure systemd user slice limits for rootless podman
+	if err := ensureSystemdSliceLimitsConfigured(ctx); err != nil {
+		return err
+	}
+
+	// 6. Configure SMT level to 2 and persist via systemd
 	if err := ensureSMTConfigured(ctx); err != nil {
 		return err
 	}
 
-	// 6. Configure SELinux policy for Podman socket access
+	// 7. Configure SELinux policy for Podman socket access
 	if err := ensureSELinuxPolicyConfigured(ctx); err != nil {
 		return err
 	}

@@ -42,7 +42,7 @@ type RepairResult struct {
 
 // Repair attempts to fix all failed Spyre checks.
 func Repair(checks []check.CheckResult) []RepairResult {
-	const checkResultsLen = 8
+	const checkResultsLen = 7
 	results := make([]RepairResult, 0, checkResultsLen)
 
 	// Create a map for easy lookup.
@@ -52,13 +52,12 @@ func Repair(checks []check.CheckResult) []RepairResult {
 	}
 
 	// Fix checks in dependency order.
-	// Note: User group and ulimit configurations moved to generic bootstrap flow
+	// Note: User group, ulimit, and systemd slice limit configurations moved to generic bootstrap flow
 	results = append(results, fixVFIODriverConfig(checkMap))
 	results = append(results, fixUdevRule(checkMap))
 	results = append(results, fixVFIOPCIConf(checkMap))
 	results = append(results, fixVFIOModule(checkMap))
 	results = append(results, fixVFIOPermissions(checkMap, RepairResult{}))
-	results = append(results, fixSystemdUserSliceLimits(checkMap))
 	results = append(results, fixSELinuxVFIOPolicy())
 	results = append(results, fixPodmanServiceSupplementaryGroups(checkMap))
 
@@ -286,82 +285,6 @@ func fixVFIOPermissions(checkMap map[string]check.CheckResult, userGroupResult R
 	}
 
 	return RepairResult{CheckName: checkName, Status: StatusFixed}
-}
-
-// reloadSystemdDaemon reloads the systemd daemon configuration.
-func reloadSystemdDaemon() error {
-	exitCode, _, stderr, err := utils.ExecuteCommand("systemctl", "daemon-reload")
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("failed to reload systemd: %v, stderr: %s", err, stderr)
-	}
-
-	return nil
-}
-
-// getUserIDForSlice gets the user ID for the SUDO_USER.
-func getUserIDForSlice(sudoUser string) (string, error) {
-	exitCode, stdout, stderr, err := utils.ExecuteCommand("id", "-u", sudoUser)
-	if err != nil || exitCode != 0 {
-		return "", fmt.Errorf("failed to get user ID: %v, stderr: %s", err, stderr)
-	}
-
-	return strings.TrimSpace(stdout), nil
-}
-
-// writeSystemdSliceLimits writes the systemd slice limits configuration file.
-func writeSystemdSliceLimits(sliceDir, limitsFile string) error {
-	if err := os.MkdirAll(sliceDir, dirPermissions); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", sliceDir, err)
-	}
-
-	limitsContent := `[Slice]
-LimitNOFILE=134217728
-LimitMEMLOCK=infinity
-`
-	if err := utils.WriteToFile(limitsFile, limitsContent); err != nil {
-		return fmt.Errorf("failed to write limits file: %w", err)
-	}
-
-	return nil
-}
-
-// fixSystemdUserSliceLimits configures systemd user slice limits for rootless podman.
-// This ensures that containers started by non-root users have proper ulimits.
-func fixSystemdUserSliceLimits(checkMap map[string]check.CheckResult) RepairResult {
-	checkName := "Systemd user slice limits configuration"
-	chk, ok := getCheckFromMap(checkMap, checkName)
-	if !ok {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped}
-	}
-
-	if chk.GetStatus() {
-		return RepairResult{CheckName: checkName, Status: StatusSkipped}
-	}
-
-	sudoUser := os.Getenv("SUDO_USER")
-	if sudoUser == "" {
-		return RepairResult{CheckName: checkName, Status: StatusNotFixable,
-			Message: "Not running via sudo, cannot configure user slice"}
-	}
-
-	userID, err := getUserIDForSlice(sudoUser)
-	if err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	sliceDir := fmt.Sprintf("/etc/systemd/system/user-%s.slice.d", userID)
-	limitsFile := fmt.Sprintf("%s/limits.conf", sliceDir)
-
-	if err := writeSystemdSliceLimits(sliceDir, limitsFile); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	if err := reloadSystemdDaemon(); err != nil {
-		return RepairResult{CheckName: checkName, Status: StatusFailedToFix, Error: err}
-	}
-
-	return RepairResult{CheckName: checkName, Status: StatusFixed,
-		Message: fmt.Sprintf("Configured systemd slice limits for user %s (UID: %s)", sudoUser, userID)}
 }
 
 // isSELinuxEnabledAndActive checks if SELinux is enabled and active.

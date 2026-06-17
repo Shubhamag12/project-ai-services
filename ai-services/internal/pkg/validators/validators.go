@@ -14,6 +14,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/platform"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/power"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/rhn"
+	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/slicelimits"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/spyre"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/ulimits"
 	"github.com/project-ai-services/ai-services/internal/pkg/validators/podman/usergroup"
@@ -29,6 +30,7 @@ func init() {
 	PodmanRegistry.Register(spyre.NewSpyreRule())
 	PodmanRegistry.Register(usergroup.NewUsergroupRule())
 	PodmanRegistry.Register(ulimits.NewUlimitsRule())
+	PodmanRegistry.Register(slicelimits.NewSliceLimitsRule())
 
 	// OpenshiftChecks
 	OpenshiftRegistry.Register(kubeconfig.NewKubeconfigRule())

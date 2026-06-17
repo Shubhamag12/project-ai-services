@@ -23,21 +23,21 @@ func (r *UsergroupRule) Description() string {
 }
 
 func (r *UsergroupRule) Verify() error {
-	logger.Infoln("Validating sentient group exists", logger.VerbosityLevelDebug)
+	logger.Debugln("Validating sentient group exists")
 
 	// Check if sentient group exists using getent
-	cmd := exec.Command("getent", "group", "sentient")
+	cmd := exec.Command("getent", "group", constants.SentientGroupName)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sentient group does not exist")
+		return fmt.Errorf("%s group does not exist", constants.SentientGroupName)
 	}
 
-	logger.Infoln("✓ sentient group exists", logger.VerbosityLevelDebug)
+	logger.Debugf("✓ %s group exists", constants.SentientGroupName)
 
 	return nil
 }
 
 func (r *UsergroupRule) Message() string {
-	return "Sentient group exists"
+	return fmt.Sprintf("%s group exists", constants.SentientGroupName)
 }
 
 func (r *UsergroupRule) Level() constants.ValidationLevel {

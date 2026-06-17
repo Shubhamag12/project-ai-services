@@ -26,7 +26,7 @@ func (r *UlimitsRule) Description() string {
 }
 
 func (r *UlimitsRule) Verify() error {
-	logger.Infoln("Validating ulimit configurations", logger.VerbosityLevelDebug)
+	logger.Debugln("Validating ulimit configurations")
 
 	// Validate memlock configuration
 	if err := r.validateMemlockConf(); err != nil {
@@ -38,21 +38,16 @@ func (r *UlimitsRule) Verify() error {
 		return err
 	}
 
-	logger.Infoln("✓ ulimit configurations are valid", logger.VerbosityLevelDebug)
+	logger.Debugln("✓ ulimit configurations are valid")
 
 	return nil
 }
 
 func (r *UlimitsRule) validateMemlockConf() error {
-	const (
-		memlockConfFile = "/etc/security/limits.d/memlock.conf"
-		expectedConf    = "@sentient - memlock unlimited"
-	)
-
-	lines, err := utils.ReadFileLines(memlockConfFile)
+	lines, err := utils.ReadFileLines(constants.MemlockConfFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("memlock configuration file does not exist: %s", memlockConfFile)
+			return fmt.Errorf("memlock configuration file does not exist: %s", constants.MemlockConfFile)
 		}
 
 		return fmt.Errorf("failed to read memlock configuration: %w", err)
@@ -60,27 +55,21 @@ func (r *UlimitsRule) validateMemlockConf() error {
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == expectedConf {
-			logger.Infoln("✓ memlock configuration is valid", logger.VerbosityLevelDebug)
+		if line == constants.ExpectedMemlockConfig {
+			logger.Debugln("✓ memlock configuration is valid")
 
 			return nil
 		}
 	}
 
-	return fmt.Errorf("memlock configuration not found or invalid in %s", memlockConfFile)
+	return fmt.Errorf("memlock configuration not found or invalid in %s", constants.MemlockConfFile)
 }
 
 func (r *UlimitsRule) validateNofileConf() error {
-	const (
-		nofileConfFile   = "/etc/security/limits.conf"
-		minNofileLimit   = 134217728
-		nofileFieldCount = 4
-	)
-
-	lines, err := utils.ReadFileLines(nofileConfFile)
+	lines, err := utils.ReadFileLines(constants.NofileConfFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("nofile configuration file does not exist: %s", nofileConfFile)
+			return fmt.Errorf("nofile configuration file does not exist: %s", constants.NofileConfFile)
 		}
 
 		return fmt.Errorf("failed to read nofile configuration: %w", err)
@@ -95,8 +84,8 @@ func (r *UlimitsRule) validateNofileConf() error {
 		}
 
 		// Check for @sentient hard nofile configuration
-		if err := r.checkNofileLine(line, minNofileLimit, nofileFieldCount); err == nil {
-			logger.Infoln("✓ nofile configuration is valid", logger.VerbosityLevelDebug)
+		if err := r.checkNofileLine(line); err == nil {
+			logger.Debugln("✓ nofile configuration is valid")
 
 			return nil
 		} else if err.Error() != "not a nofile line" {
@@ -104,17 +93,18 @@ func (r *UlimitsRule) validateNofileConf() error {
 		}
 	}
 
-	return fmt.Errorf("nofile configuration not found or invalid in %s", nofileConfFile)
+	return fmt.Errorf("nofile configuration not found or invalid in %s", constants.NofileConfFile)
 }
 
 // checkNofileLine validates a single nofile configuration line.
-func (r *UlimitsRule) checkNofileLine(line string, minLimit, fieldCount int) error {
-	if !strings.HasPrefix(line, "@sentient") || !strings.Contains(line, "nofile") {
+func (r *UlimitsRule) checkNofileLine(line string) error {
+	sentientPrefix := "@" + constants.SentientGroupName
+	if !strings.HasPrefix(line, sentientPrefix) || !strings.Contains(line, "nofile") {
 		return fmt.Errorf("not a nofile line")
 	}
 
 	parts := strings.Fields(line)
-	if len(parts) < fieldCount || parts[1] != "hard" || parts[2] != "nofile" {
+	if len(parts) < constants.NofileFieldCount || parts[1] != "hard" || parts[2] != "nofile" {
 		return fmt.Errorf("not a nofile line")
 	}
 
@@ -123,8 +113,8 @@ func (r *UlimitsRule) checkNofileLine(line string, minLimit, fieldCount int) err
 		return fmt.Errorf("not a nofile line")
 	}
 
-	if value < minLimit {
-		return fmt.Errorf("nofile limit (%d) is below minimum required (%d)", value, minLimit)
+	if value < constants.MinNofileLimit {
+		return fmt.Errorf("nofile limit (%d) is below minimum required (%d)", value, constants.MinNofileLimit)
 	}
 
 	return nil
