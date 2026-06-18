@@ -155,13 +155,7 @@ func setupPodman() error {
 	sudoUser := os.Getenv("SUDO_USER")
 
 	// Enable podman services based on user context
-	var err error
-	if euid == 0 && sudoUser == "" {
-		err = enableRootPodmanServices()
-	} else {
-		err = enableUserPodmanServices(sudoUser)
-	}
-	if err != nil {
+	if err := enablePodmanServices(euid == 0 && sudoUser == "", sudoUser); err != nil {
 		return err
 	}
 
@@ -177,28 +171,22 @@ func setupPodman() error {
 	return nil
 }
 
-// enableRootPodmanServices enables system-wide podman services for root user.
-func enableRootPodmanServices() error {
-	if err := systemctl("enable", "podman.socket", "--now"); err != nil {
-		return fmt.Errorf("failed to enable podman socket: %w", err)
-	}
-	if err := systemctl("enable", "podman-restart.service", "--now"); err != nil {
-		return fmt.Errorf("failed to enable podman-restart service: %w", err)
+// enablePodmanServices enables podman services for root or user context.
+func enablePodmanServices(isRoot bool, sudoUser string) error {
+	services := []string{"podman.socket", "podman-restart.service"}
+	var args []string
+
+	if isRoot {
+		args = []string{"--now"}
+	} else {
+		args = []string{"--now", fmt.Sprintf("--machine=%s@.host", sudoUser), "--user"}
 	}
 
-	return nil
-}
-
-// enableUserPodmanServices enables user-specific podman services for non-root user.
-func enableUserPodmanServices(sudoUser string) error {
-	machineArg := fmt.Sprintf("--machine=%s@.host", sudoUser)
-	if err := systemctl("enable", "podman.socket", "--now", machineArg, "--user"); err != nil {
-		return fmt.Errorf("failed to enable podman socket: %w", err)
+	for _, svc := range services {
+		if err := systemctl("enable", svc, args...); err != nil {
+			return fmt.Errorf("failed to enable %s: %w", svc, err)
+		}
 	}
-	if err := systemctl("enable", "podman-restart.service", "--now", "--user"); err != nil {
-		return fmt.Errorf("failed to enable podman-restart service: %w", err)
-	}
-
 	return nil
 }
 
