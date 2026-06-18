@@ -187,6 +187,7 @@ func enablePodmanServices(isRoot bool, sudoUser string) error {
 			return fmt.Errorf("failed to enable %s: %w", svc, err)
 		}
 	}
+	
 	return nil
 }
 
