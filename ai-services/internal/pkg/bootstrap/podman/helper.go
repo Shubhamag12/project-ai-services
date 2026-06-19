@@ -187,7 +187,7 @@ func enablePodmanServices(isRoot bool, sudoUser string) error {
 			return fmt.Errorf("failed to enable %s: %w", svc, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -336,22 +336,17 @@ func ensurePodmanInstalled(ctx context.Context) error {
 	return nil
 }
 
-// ensurePodmanConfigured verifies podman configuration and sets it up if needed.
-func ensurePodmanConfigured(ctx context.Context) error {
-	s := spinner.New("Verifying podman configuration")
+// configurePodman enable podman services in the system.
+func configurePodman(ctx context.Context) error {
+	s := spinner.New("Configure podman")
 	s.Start(ctx)
 
-	if err := utils.PodmanHealthCheck(); err != nil {
-		s.UpdateMessage("Configuring podman")
-		if err := setupPodman(); err != nil {
-			s.Fail("failed to configure podman")
+	if err := setupPodman(); err != nil {
+		s.Fail("failed to configure podman")
 
-			return err
-		}
-		s.Stop("podman configured successfully")
-	} else {
-		s.Stop("Podman already configured")
+		return err
 	}
+	s.Stop("podman configured successfully")
 
 	return nil
 }
