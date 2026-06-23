@@ -22,12 +22,12 @@ func ResetCatalogCertificate(sslCertPath, sslKeyPath string) error {
 	}
 
 	// Get existing catalog pod details
-	config, _, err := catalogUtils.GetCatalogPodConfig(deployCtx.Runtime)
+	opts, _, err := catalogUtils.GetCatalogPodConfig(deployCtx.Runtime)
 	if err != nil {
 		return fmt.Errorf("failed to get catalog pod details: %w", err)
 	}
 
-	if config.BaseDir == "" {
+	if opts.BaseDir == "" {
 		return fmt.Errorf("AI_SERVICES_BASE_DIR not found in catalog configuration")
 	}
 
@@ -56,7 +56,7 @@ func ResetCatalogCertificate(sslCertPath, sslKeyPath string) error {
 	}
 
 	// Load new SSL certificates to Caddy
-	if err := caddyCtx.LoadSSLCertificates(config.BaseDir, sslCertPath, sslKeyPath); err != nil {
+	if err := caddyCtx.LoadSSLCertificates(opts.BaseDir, sslCertPath, sslKeyPath); err != nil {
 		return fmt.Errorf("failed to load certificates: %w", err)
 	}
 

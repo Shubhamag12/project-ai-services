@@ -9,16 +9,18 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 )
 
-// CatalogPodConfig holds configuration retrieved from a catalog pod.
-type CatalogPodConfig struct {
-	BaseDir    string
-	DomainName string
-	HttpsPort  int
+// PodmanConfigureOptions contains the configuration for configuring the catalog service on Podman runtime.
+type PodmanConfigureOptions struct {
+	BaseDir     string
+	DomainName  string // Custom domain name for self-signed certificates
+	SSLCertPath string // Path to user-provided SSL certificate
+	SSLKeyPath  string // Path to user-provided SSL private key
+	HttpsPort   int
 }
 
 // GetCatalogPodConfig retrieves catalog pod configuration by inspecting the running pod and its containers.
 // It extracts environment variables like AI_SERVICES_BASE_DIR, DOMAIN_SUFFIX, and CADDY_HTTPS_PORT.
-func GetCatalogPodConfig(rt runtime.Runtime) (*CatalogPodConfig, string, error) {
+func GetCatalogPodConfig(rt runtime.Runtime) (*PodmanConfigureOptions, string, error) {
 	// Build filter to find all pods using the catalog secret via label
 	logger.Debugf("Getting catalog pod configuration")
 	filter := map[string][]string{
@@ -45,7 +47,7 @@ func GetCatalogPodConfig(rt runtime.Runtime) (*CatalogPodConfig, string, error) 
 		return nil, "", fmt.Errorf("failed to inspect pod %s: %w", pod.Name, err)
 	}
 
-	config := &CatalogPodConfig{}
+	config := &PodmanConfigureOptions{}
 
 	for _, container := range pInfo.Containers {
 		// Inspect container to get environment variables
@@ -60,7 +62,7 @@ func GetCatalogPodConfig(rt runtime.Runtime) (*CatalogPodConfig, string, error) 
 }
 
 // extractConfigFromEnv extracts configuration values from container environment variables.
-func extractConfigFromEnv(podEnv map[string]string, config *CatalogPodConfig) {
+func extractConfigFromEnv(podEnv map[string]string, config *PodmanConfigureOptions) {
 	if value, ok := podEnv["AI_SERVICES_BASE_DIR"]; ok {
 		config.BaseDir = value
 	}

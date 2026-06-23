@@ -46,7 +46,7 @@ func ResetCatalogPassword() error {
 	return nil
 }
 
-func getAndDeleteCatalogPod(rt runtime.Runtime) (*PodmanConfigureOptions, error) {
+func getAndDeleteCatalogPod(rt runtime.Runtime) (*catalogUtils.PodmanConfigureOptions, error) {
 	opts, podID, err := getCatalogPodDetails(rt)
 	if err != nil {
 		return nil, err
@@ -62,17 +62,11 @@ func getAndDeleteCatalogPod(rt runtime.Runtime) (*PodmanConfigureOptions, error)
 }
 
 // getCatalogPodDetails retrieves catalog pod configuration by inspecting the running pod and its containers.
-func getCatalogPodDetails(rt runtime.Runtime) (*PodmanConfigureOptions, string, error) {
+func getCatalogPodDetails(rt runtime.Runtime) (*catalogUtils.PodmanConfigureOptions, string, error) {
 	config, podID, err := catalogUtils.GetCatalogPodConfig(rt)
 	if err != nil {
 		return nil, "", err
 	}
 
-	opts := &PodmanConfigureOptions{
-		BaseDir:    config.BaseDir,
-		DomainName: config.DomainName,
-		HttpsPort:  config.HttpsPort,
-	}
-
-	return opts, podID, nil
+	return config, podID, nil
 }
