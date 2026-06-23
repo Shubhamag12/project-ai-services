@@ -539,7 +539,6 @@ func pollApplicationStatus(appClient *catalogClient.ApplicationClient, appName s
 
 // handleApplicationStatus handles the application status and returns (done, error).
 func handleApplicationStatus(app *catalogTypes.Application, appName string) (bool, error) {
-	// Status values from ai-services/internal/pkg/catalog/db/models/application.go.
 	switch app.Status {
 	case "Running":
 		logger.Infof("Application '%s' is ready!\n", appName)

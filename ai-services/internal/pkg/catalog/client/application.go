@@ -242,4 +242,10 @@ func (c *ApplicationClient) GetComponentProviderParams(componentType, providerID
 	return result, nil
 }
 
+// Client returns the underlying authenticated HTTP client.
+// This allows access to client-level operations like token refresh.
+func (c *ApplicationClient) Client() *Client {
+	return c.client
+}
+
 // Made with Bob
