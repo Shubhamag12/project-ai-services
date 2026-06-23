@@ -9,7 +9,6 @@ import (
 
 	catalogConstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
-	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
@@ -122,7 +121,7 @@ func performCleanup(rt *podman.PodmanClient, pods []types.Pod, skipCleanup bool)
 	}
 
 	// Delete caddy data
-	caddyDataPath := getDataPath(baseDir, "common")
+	caddyDataPath := filepath.Join(baseDir, "common")
 	if err := dataDeletion(caddyDataPath); err != nil {
 		return err
 	}
@@ -146,16 +145,6 @@ func deleteSecrets(rt *podman.PodmanClient, secrets []string) error {
 	}
 
 	return nil
-}
-
-// getDataPath constructs the data path based on the base directory and subdirectory.
-func getDataPath(baseDir, subDir string) string {
-	// this is because we prepend "ai-services" to custom directory and not to default directory
-	if baseDir == constants.DefaultBaseDir {
-		return filepath.Join(baseDir, subDir)
-	}
-
-	return filepath.Join(baseDir, "ai-services", subDir)
 }
 
 // cleanupDatabaseResources handles database volume and secret cleanup.
