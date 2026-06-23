@@ -89,7 +89,17 @@ func confirmDeletion(pods []types.Pod) (bool, error) {
 // performCleanup executes all cleanup operations.
 func performCleanup(rt *podman.PodmanClient, pods []types.Pod, skipCleanup bool) error {
 	logger.Infoln("Proceeding with deletion...")
-	baseDir := utils.GetBaseDir()
+
+	// Retrieve the BaseDir from the catalog pod configuration
+	var baseDir string
+	config, _, err := catalogUtils.GetCatalogPodConfig(rt)
+	if err != nil {
+		logger.Warningf("Failed to retrieve BaseDir from catalog pod: %v. Using default BaseDir.\n", err)
+		baseDir = utils.GetBaseDir()
+	} else {
+		baseDir = config.BaseDir
+	}
+	logger.Infof("Using base directory for cleanup: %s\n", baseDir)
 
 	secretsToDelete, secretsToSkip := fetchSecretsToDelete(pods)
 	secretsToDelete = append(secretsToDelete, catalogConstants.PodmanAuthSecret)

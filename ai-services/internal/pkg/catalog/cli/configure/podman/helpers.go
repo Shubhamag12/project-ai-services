@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/common/podman/caddy"
+	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 )
 
@@ -13,9 +14,15 @@ const certsDirName = "certs"
 // getExistingConfigFromCatalogBackend retrieves the existing configuration from the catalog pod.
 // These values are used to validate that configuration hasn't changed during reconfigure operations.
 func getExistingConfigFromCatalogBackend(rt runtime.Runtime) (*PodmanConfigureOptions, error) {
-	opts, _, err := getCatalogPodDetails(rt)
+	config, _, err := catalogUtils.GetCatalogPodConfig(rt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get catalog pod details: %w", err)
+	}
+
+	opts := &PodmanConfigureOptions{
+		BaseDir:    config.BaseDir,
+		DomainName: config.DomainName,
+		HttpsPort:  config.HttpsPort,
 	}
 
 	if err := validateRequiredFields(opts); err != nil {
