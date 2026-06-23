@@ -126,6 +126,12 @@ func performCleanup(rt *podman.PodmanClient, pods []types.Pod, skipCleanup bool)
 		return err
 	}
 
+	// Delete models data
+	modelsDataPath := filepath.Join(baseDir, "models")
+	if err := dataDeletion(modelsDataPath); err != nil {
+		return err
+	}
+
 	// Delete database data and secrets
 	if err := cleanupDatabaseResources(rt, secretsToSkip, volumesToSkip, skipCleanup); err != nil {
 		return err
