@@ -758,7 +758,7 @@ func (s *ApplicationService) filterSensitiveFields(ctx context.Context, params m
 	return metadata, nil
 }
 
-// GetApplicationResources retrieves resource usage (CPU, memory) for an application using runtime-specific stats.
+// GetApplicationResources retrieves resource usage (vCPU, memory) for an application using runtime-specific stats.
 func (s *ApplicationService) GetApplicationResources(ctx context.Context, id uuid.UUID) (*types.ApplicationResourcesResponse, error) {
 	// Fetch application from database
 	app, err := s.appRepo.GetByID(ctx, id)
@@ -796,9 +796,9 @@ func (s *ApplicationService) GetApplicationResources(ctx context.Context, id uui
 
 // resourceTotals holds aggregated resource information.
 type resourceTotals struct {
-	allocatedCPU    int
+	allocatedVCPU   int
 	allocatedMemory int
-	usedCPU         float64
+	usedVCPU        float64
 	usedMemory      uint64
 	spyreCards      map[string]bool
 }
@@ -850,10 +850,10 @@ func (s *ApplicationService) processServiceResources(
 	return nil
 }
 
-// addAllocatedResources is a helper function that adds allocated CPU and memory from runtime metadata to totals.
+// addAllocatedResources is a helper function that adds allocated vCPU and memory from runtime metadata to totals.
 func addAllocatedResources(runtimeMetadata *clitemplates.AppMetadata, totals *resourceTotals) {
 	if runtimeMetadata.Resources != nil {
-		totals.allocatedCPU += runtimeMetadata.Resources.CPU
+		totals.allocatedVCPU += runtimeMetadata.Resources.VCPU
 		totals.allocatedMemory += runtimeMetadata.Resources.Memory
 	}
 }
@@ -992,7 +992,7 @@ func collectPodResources(
 	}
 
 	// Accumulate used resources
-	totals.usedCPU += resources.CPUCores
+	totals.usedVCPU += resources.VCPUs
 	totals.usedMemory += resources.MemUsage
 
 	return nil
@@ -1014,9 +1014,9 @@ func buildResourcesResponse(totals *resourceTotals) *types.ApplicationResourcesR
 
 	// Build response with total and used resources
 	return &types.ApplicationResourcesResponse{
-		CPU: types.ApplicationCPUInfo{
-			TotalCores: float64(totals.allocatedCPU),
-			UsedCores:  math.Round(totals.usedCPU*consts.PercentageDivisor) / consts.PercentageDivisor,
+		VCPU: types.ApplicationVCPUInfo{
+			Total: float64(totals.allocatedVCPU),
+			Used:  math.Round(totals.usedVCPU*consts.PercentageDivisor) / consts.PercentageDivisor,
 		},
 		Memory: types.ApplicationMemInfo{
 			TotalBytes: int64(totals.allocatedMemory),

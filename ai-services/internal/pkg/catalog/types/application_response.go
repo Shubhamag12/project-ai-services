@@ -63,15 +63,15 @@ type PaginationMetadata struct {
 
 // ApplicationResourcesResponse represents the resource usage response for an application.
 type ApplicationResourcesResponse struct {
-	CPU          ApplicationCPUInfo  `json:"cpu"`
+	VCPU         ApplicationVCPUInfo `json:"vcpu"`
 	Memory       ApplicationMemInfo  `json:"memory"`
 	Accelerators map[string][]string `json:"accelerators"`
 }
 
-// ApplicationCPUInfo represents CPU allocation and usage for an application.
-type ApplicationCPUInfo struct {
-	TotalCores float64 `json:"total_cores"` // Total allocated CPU cores
-	UsedCores  float64 `json:"used_cores"`  // Actually used CPU cores
+// ApplicationVCPUInfo represents vCPU allocation and usage for an application.
+type ApplicationVCPUInfo struct {
+	Total float64 `json:"total"` // Total allocated vCPUs
+	Used  float64 `json:"used"`  // Actually used vCPUs
 }
 
 // ApplicationMemInfo represents memory allocation and usage for an application.

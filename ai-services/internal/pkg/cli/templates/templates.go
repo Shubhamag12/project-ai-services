@@ -21,7 +21,7 @@ type AppMetadata struct {
 
 // RuntimeResources represents resource requirements in runtime-specific metadata.
 type RuntimeResources struct {
-	CPU          int            `yaml:"cpu,omitempty"`          // CPU cores
+	VCPU         int            `yaml:"vcpu,omitempty"`         // vCPUs
 	Memory       int            `yaml:"memory,omitempty"`       // Memory in bytes
 	Storage      int            `yaml:"storage,omitempty"`      // Storage in bytes
 	Accelerators map[string]int `yaml:"accelerators,omitempty"` // Accelerator cards (e.g., "ibm.com/spyre_pf": 1)
