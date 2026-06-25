@@ -32,15 +32,6 @@ func GetAppByName(appClient *catalogClient.ApplicationClient, appName string) (*
 	return nil, fmt.Errorf("application with name '%s' not found", appName)
 }
 
-func GetAppByID(appClient *catalogClient.ApplicationClient, id string) (*types.Application, error) {
-	resp, err := appClient.GetApplication(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, fmt.Errorf("application with name '%s' not found", id)
-}
-
 // GetAppDetailsWithComponents retrieves full application details including services and components.
 // It first finds the app by name, then fetches full details by ID.
 func GetAppDetailsWithComponents(appName string) (*types.Application, error) {
