@@ -2,15 +2,15 @@ package models
 
 // SystemInfo represents system resource information.
 type SystemInfo struct {
-	VCPU         *VCPUInfo                   `json:"vcpu,omitempty"`
+	CPU          *CPUInfo                    `json:"cpu,omitempty"`
 	Memory       *MemoryInfo                 `json:"memory,omitempty"`
 	Accelerators map[string]*AcceleratorInfo `json:"accelerators,omitempty"`
 }
 
-// VCPUInfo represents vCPU utilization information.
-type VCPUInfo struct {
-	Total     int     `json:"total"`
-	Available float64 `json:"available"`
+// CPUInfo represents CPU utilization information.
+type CPUInfo struct {
+	Total     int     `json:"total_cpu"`
+	Available float64 `json:"available_cpu"`
 }
 
 // MemoryInfo represents memory usage information.

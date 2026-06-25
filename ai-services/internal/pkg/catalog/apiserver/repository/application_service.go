@@ -796,9 +796,9 @@ func (s *ApplicationService) GetApplicationResources(ctx context.Context, id uui
 
 // resourceTotals holds aggregated resource information.
 type resourceTotals struct {
-	allocatedVCPU   int
+	allocatedCPU    int
 	allocatedMemory int
-	usedVCPU        float64
+	usedCPU         float64
 	usedMemory      uint64
 	spyreCards      map[string]bool
 }
@@ -850,10 +850,10 @@ func (s *ApplicationService) processServiceResources(
 	return nil
 }
 
-// addAllocatedResources is a helper function that adds allocated vCPU and memory from runtime metadata to totals.
+// addAllocatedResources is a helper function that adds allocated CPU and memory from runtime metadata to totals.
 func addAllocatedResources(runtimeMetadata *clitemplates.AppMetadata, totals *resourceTotals) {
 	if runtimeMetadata.Resources != nil {
-		totals.allocatedVCPU += runtimeMetadata.Resources.VCPU
+		totals.allocatedCPU += runtimeMetadata.Resources.CPU
 		totals.allocatedMemory += runtimeMetadata.Resources.Memory
 	}
 }
@@ -992,7 +992,7 @@ func collectPodResources(
 	}
 
 	// Accumulate used resources
-	totals.usedVCPU += resources.VCPUs
+	totals.usedCPU += resources.CPU
 	totals.usedMemory += resources.MemUsage
 
 	return nil
@@ -1014,9 +1014,9 @@ func buildResourcesResponse(totals *resourceTotals) *types.ApplicationResourcesR
 
 	// Build response with total and used resources
 	return &types.ApplicationResourcesResponse{
-		VCPU: types.ApplicationVCPUInfo{
-			Total: float64(totals.allocatedVCPU),
-			Used:  math.Round(totals.usedVCPU*consts.PercentageDivisor) / consts.PercentageDivisor,
+		CPU: types.ApplicationCPUInfo{
+			Total: float64(totals.allocatedCPU),
+			Used:  math.Round(totals.usedCPU*consts.PercentageDivisor) / consts.PercentageDivisor,
 		},
 		Memory: types.ApplicationMemInfo{
 			TotalBytes: int64(totals.allocatedMemory),

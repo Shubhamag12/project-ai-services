@@ -96,7 +96,7 @@ type DependencyReference struct {
 
 // Resources represents resource requirements for a service or component.
 type Resources struct {
-	VCPU         int            `yaml:"vcpu,omitempty" json:"vcpu,omitempty"`                 // vCPUs
+	CPU          int            `yaml:"cpu,omitempty" json:"cpu,omitempty"`                   // CPU cores
 	Memory       int            `yaml:"memory,omitempty" json:"memory,omitempty"`             // Memory in bytes
 	Accelerators map[string]int `yaml:"accelerators,omitempty" json:"accelerators,omitempty"` // Accelerator cards (e.g., "ibm.com/spyre_pf": 1)
 	Storage      int            `yaml:"storage,omitempty" json:"storage,omitempty"`           // Storage in bytes

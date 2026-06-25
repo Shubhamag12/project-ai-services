@@ -161,7 +161,7 @@ func (p *CatalogProvider) GetServiceDeployOptions(ctx context.Context, serviceID
 	if err == nil && runtimeMetadata.Resources != nil {
 		// Convert RuntimeResources to types.Resources
 		resources = &types.Resources{
-			VCPU:         runtimeMetadata.Resources.VCPU,
+			CPU:          runtimeMetadata.Resources.CPU,
 			Memory:       runtimeMetadata.Resources.Memory,
 			Storage:      runtimeMetadata.Resources.Storage,
 			Accelerators: runtimeMetadata.Resources.Accelerators,
@@ -236,7 +236,7 @@ func (p *CatalogProvider) buildProvider(ctx context.Context, comp types.Componen
 		// Only include resources if requested and available
 		if includeResources && runtimeMetadata.Resources != nil {
 			resources = &types.Resources{
-				VCPU:         runtimeMetadata.Resources.VCPU,
+				CPU:          runtimeMetadata.Resources.CPU,
 				Memory:       runtimeMetadata.Resources.Memory,
 				Storage:      runtimeMetadata.Resources.Storage,
 				Accelerators: runtimeMetadata.Resources.Accelerators,

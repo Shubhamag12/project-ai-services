@@ -434,31 +434,31 @@ func (pc *PodmanClient) Type() types.RuntimeType {
 	return types.RuntimeTypePodman
 }
 
-// GetSystemInfo retrieves system resource information including vCPU, memory, and accelerators.
+// GetSystemInfo retrieves system resource information including CPU, memory, and accelerators.
 func (pc *PodmanClient) GetSystemInfo() (*models.SystemInfo, error) {
 	sysInfo := &models.SystemInfo{}
 
-	// Get Podman system info for vCPU and memory
+	// Get Podman system info for CPU and memory
 	info, err := system.Info(pc.Context, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system info: %w", err)
 	}
 
-	// Extract vCPU and memory information
+	// Extract CPU and memory information
 	if info.Host != nil {
-		totalVCPUs := int(info.Host.CPUs)
+		totalCPUs := int(info.Host.CPUs)
 		idlePercent := 0.0
 
 		if info.Host.CPUUtilization != nil {
 			idlePercent = info.Host.CPUUtilization.IdlePercent
 		}
 
-		// Calculate available vCPUs: available = (total * idle_percent) / 100
-		availableVCPUs := (float64(totalVCPUs) * idlePercent) / constants.PercentageDivisor
+		// Calculate available CPUs: available = (total * idle_percent) / 100
+		availableCPUs := (float64(totalCPUs) * idlePercent) / constants.PercentageDivisor
 
-		sysInfo.VCPU = &models.VCPUInfo{
-			Total:     totalVCPUs,
-			Available: availableVCPUs,
+		sysInfo.CPU = &models.CPUInfo{
+			Total:     totalCPUs,
+			Available: availableCPUs,
 		}
 
 		sysInfo.Memory = &models.MemoryInfo{
@@ -523,7 +523,7 @@ func (pc *PodmanClient) GetPodResources(nameOrID string) (*types.PodResources, e
 
 	if len(podInspect.Containers) == 0 {
 		return &types.PodResources{
-			VCPUs:      0,
+			CPU:        0,
 			MemUsage:   0,
 			SpyreCards: []string{},
 		}, nil
@@ -536,7 +536,7 @@ func (pc *PodmanClient) GetPodResources(nameOrID string) (*types.PodResources, e
 // aggregateContainerResourcesWithStats collects and aggregates resources from all non-infra containers using podman stats.
 func (pc *PodmanClient) aggregateContainerResourcesWithStats(podInspect *entities.PodInspectReport) (*types.PodResources, error) {
 	var totalMemUsage uint64
-	var totalVCPUs float64
+	var totalCPUs float64
 	spyreCards := []string{}
 
 	for _, container := range podInspect.Containers {
@@ -545,7 +545,7 @@ func (pc *PodmanClient) aggregateContainerResourcesWithStats(podInspect *entitie
 			continue
 		}
 
-		// Get container stats for actual vCPU and memory usage using podman stats
+		// Get container stats for actual CPU and memory usage using podman stats
 		statsChan, err := containers.Stats(pc.Context, []string{container.ID}, &containers.StatsOptions{
 			Stream: utils.BoolPtr(false), // Get a single snapshot, not streaming
 		})
@@ -564,10 +564,10 @@ func (pc *PodmanClient) aggregateContainerResourcesWithStats(podInspect *entitie
 			// Accumulate memory usage (in bytes)
 			totalMemUsage += stats.MemUsage
 
-			// Accumulate vCPU usage
-			// The CPU field is a percentage (e.g., 150.0 = 1.5 vCPUs)
-			// Convert percentage to vCPUs by dividing by 100
-			totalVCPUs += stats.CPU / constants.PercentageDivisor
+			// Accumulate CPU usage
+			// The CPU field is a percentage (e.g., 150.0 = 1.5 CPUs)
+			// Convert percentage to CPUs by dividing by 100
+			totalCPUs += stats.CPU / constants.PercentageDivisor
 		}
 
 		// Inspect container to get Spyre card annotations
@@ -581,7 +581,7 @@ func (pc *PodmanClient) aggregateContainerResourcesWithStats(podInspect *entitie
 	}
 
 	return &types.PodResources{
-		VCPUs:      totalVCPUs,
+		CPU:        totalCPUs,
 		MemUsage:   totalMemUsage,
 		SpyreCards: spyreCards,
 	}, nil

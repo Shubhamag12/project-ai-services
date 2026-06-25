@@ -61,7 +61,7 @@ type Route struct {
 
 // PodResources represents resource allocation and usage for a pod including accelerators.
 type PodResources struct {
-	VCPUs      float64  // vCPU usage (e.g., 1.5 vCPUs)
+	CPU        float64  // CPU usage (e.g., 1.5 CPUs)
 	MemUsage   uint64   // Memory usage in bytes
 	SpyreCards []string // List of Spyre card PCI addresses
 }

@@ -20,7 +20,7 @@ func NewResourcesHandler() *ResourcesHandler {
 
 // ResourcesResponse represents system resource information.
 type ResourcesResponse struct {
-	VCPU         *models.VCPUInfo                   `json:"vcpu,omitempty"`
+	CPU          *models.CPUInfo                    `json:"cpu,omitempty"`
 	Memory       *models.MemoryInfo                 `json:"memory,omitempty"`
 	Accelerators map[string]*models.AcceleratorInfo `json:"accelerators"`
 }
@@ -28,7 +28,7 @@ type ResourcesResponse struct {
 // GetResources godoc
 //
 //	@Summary		Get system resources
-//	@Description	Retrieves system resource information including vCPU, memory, and accelerator availability
+//	@Description	Retrieves system resource information including CPU, memory, and accelerator availability
 //	@Tags			Catalog
 //	@Produce		json
 //	@Security		BearerAuth
@@ -65,7 +65,7 @@ func (h *ResourcesHandler) GetResources(c *gin.Context) {
 	}
 
 	response := ResourcesResponse{
-		VCPU:         sysInfo.VCPU,
+		CPU:          sysInfo.CPU,
 		Memory:       sysInfo.Memory,
 		Accelerators: sysInfo.Accelerators,
 	}
