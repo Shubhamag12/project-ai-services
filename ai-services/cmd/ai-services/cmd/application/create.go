@@ -737,7 +737,11 @@ func buildServiceEntryWithDeployOptions(appClient *catalogClient.ApplicationClie
 		providerParams := extractComponentParamsForService(serviceID, compDeployOpt.Type, argParams)
 
 		// Determine provider ID and get its params
-		providerID, userParams := selectProviderFromDeployOptions(compDeployOpt, providerParams)
+		providerID, userParams, err := selectProviderFromDeployOptions(compDeployOpt, providerParams)
+		if err != nil {
+			return apiModels.Service{}, err
+		}
+
 		if providerID == "" {
 			return apiModels.Service{}, fmt.Errorf("no provider found for component type '%s'", compDeployOpt.Type)
 		}
@@ -857,20 +861,33 @@ func isComponentParameter(param string, componentTypes map[string]bool) bool {
 // - Provider with params: {componentType}.{providerID}.{param} (e.g., llm.vllm-cpu.model).
 // - Service-specific: {serviceID}.{componentType}.{providerID}[.{param}] (e.g., chat.llm.vllm-cpu or chat.llm.vllm-cpu.model).
 // Returns a map with provider as key and params as value.
+// Warns if a provider is explicitly set to false with no other provider selected.
 func extractComponentParamsForService(serviceID string, componentType string, allParams map[string]string) map[string]map[string]string {
 	providerParams := make(map[string]map[string]string)
+	falseProviders := make(map[string]bool)
 
 	// Extract global component params: {componentType}.{providerID}[.{param}].
-	extractProviderParams(componentType+".", allParams, providerParams)
+	extractProviderParams(componentType+".", allParams, providerParams, falseProviders)
 
 	// Extract service-specific component params (these override global).
-	extractProviderParams(serviceID+"."+componentType+".", allParams, providerParams)
+	extractProviderParams(serviceID+"."+componentType+".", allParams, providerParams, falseProviders)
+
+	// Warn if any provider was explicitly set to false but no other provider was selected.
+	if len(falseProviders) > 0 && len(providerParams) == 0 {
+		for providerID := range falseProviders {
+			logger.Warningf("Provider '%s' for component type '%s' is set to 'false' but no other provider was specified; the default provider will be used\n", providerID, componentType)
+		}
+	}
 
 	return providerParams
 }
 
 // extractProviderParams extracts provider parameters from allParams with the given prefix.
-func extractProviderParams(prefix string, allParams map[string]string, providerParams map[string]map[string]string) {
+// For bare provider keys (e.g., llm.vllm-cpu=true/false):
+//   - "true" selects the provider.
+//   - "false" records the provider in falseProviders and skips it.
+//   - Any other value logs a warning and is treated as "false".
+func extractProviderParams(prefix string, allParams map[string]string, providerParams map[string]map[string]string, falseProviders map[string]bool) {
 	for key, value := range allParams {
 		after, ok := strings.CutPrefix(key, prefix)
 		if !ok {
@@ -884,14 +901,27 @@ func extractProviderParams(prefix string, allParams map[string]string, providerP
 		}
 
 		providerID := parts[0]
+
+		// Bare provider key (e.g., llm.vllm-cpu=true/false).
+		if len(parts) != expectedParamParts && !strings.EqualFold(value, "true") {
+			// Any value other than "true" opts out of this provider.
+			if !strings.EqualFold(value, "false") {
+				logger.Warningf("Invalid value '%s' for provider parameter '%s': expected 'true' or 'false', treating as 'false'\n", value, key)
+			}
+
+			falseProviders[providerID] = true
+
+			continue
+		}
+
+		// Ensure provider entry exists.
 		if providerParams[providerID] == nil {
 			providerParams[providerID] = make(map[string]string)
 		}
 
-		// If there's a param name, add it; otherwise just mark provider as selected.
+		// Store nested param (e.g., llm.vllm-cpu.model=granite).
 		if len(parts) == expectedParamParts {
-			paramName := parts[1]
-			providerParams[providerID][paramName] = value
+			providerParams[providerID][parts[1]] = value
 		}
 	}
 }
@@ -902,42 +932,62 @@ func extractProviderParams(prefix string, allParams map[string]string, providerP
 // 2. For LLM and reranker components: Use vllm-spyre by default.
 // 3. Default provider marked in deploy options.
 // 4. First available provider.
-func selectProviderFromDeployOptions(compDeployOpt catalogTypes.DeployOptionsComponent, providerParams map[string]map[string]string) (string, map[string]string) {
+// Returns an error if multiple providers are specified for the same component type.
+func selectProviderFromDeployOptions(compDeployOpt catalogTypes.DeployOptionsComponent, providerParams map[string]map[string]string) (string, map[string]string, error) {
 	// Check if user specified params for a specific provider.
-	if providerID, params := findUserSpecifiedProvider(compDeployOpt, providerParams); providerID != "" {
-		return providerID, params
+	providerID, params, err := findUserSpecifiedProvider(compDeployOpt, providerParams)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if providerID != "" {
+		return providerID, params, nil
 	}
 
 	// Special logic for LLM and reranker component types - prefer Spyre acceleration.
-	if providerID := findSpyreProvider(compDeployOpt); providerID != "" {
-		return providerID, make(map[string]string)
+	if spyreID := findSpyreProvider(compDeployOpt); spyreID != "" {
+		return spyreID, make(map[string]string), nil
 	}
 
 	// Use default provider if marked.
-	if providerID := findDefaultProvider(compDeployOpt); providerID != "" {
-		return providerID, make(map[string]string)
+	if defaultID := findDefaultProvider(compDeployOpt); defaultID != "" {
+		return defaultID, make(map[string]string), nil
 	}
 
 	// Fall back to first available provider.
 	if len(compDeployOpt.Providers) > 0 {
-		return compDeployOpt.Providers[0].ID, make(map[string]string)
+		return compDeployOpt.Providers[0].ID, make(map[string]string), nil
 	}
 
-	return "", make(map[string]string)
+	return "", make(map[string]string), nil
 }
 
 // findUserSpecifiedProvider checks if user specified params for a specific provider.
-func findUserSpecifiedProvider(compDeployOpt catalogTypes.DeployOptionsComponent, providerParams map[string]map[string]string) (string, map[string]string) {
+// Returns an error if multiple valid providers are specified for the same component type.
+func findUserSpecifiedProvider(compDeployOpt catalogTypes.DeployOptionsComponent, providerParams map[string]map[string]string) (string, map[string]string, error) {
+	var matchedProvider string
+	var matchedParams map[string]string
+
 	for providerID := range providerParams {
 		// Verify this provider exists in deploy options.
 		for _, p := range compDeployOpt.Providers {
 			if p.ID == providerID {
-				return providerID, providerParams[providerID]
+				if matchedProvider != "" {
+					return "", nil, fmt.Errorf(
+						"multiple providers specified for component type '%s': '%s' and '%s'. "+
+							"Only one provider can be selected per component type",
+						compDeployOpt.Type, matchedProvider, providerID)
+				}
+
+				matchedProvider = providerID
+				matchedParams = providerParams[providerID]
+
+				break
 			}
 		}
 	}
 
-	return "", nil
+	return matchedProvider, matchedParams, nil
 }
 
 // findSpyreProvider finds vllm-spyre provider if available for the component.
