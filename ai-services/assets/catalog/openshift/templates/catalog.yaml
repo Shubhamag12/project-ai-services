@@ -60,8 +60,10 @@ spec:
           resources:
             requests:
               memory: "512Mi"
+              cpu: "{{ .Values.backend.resources.requests.cpu }}"
             limits:
               memory: "512Mi"
+              cpu: "{{ .Values.backend.resources.limits.cpu }}"
           volumeMounts:
             - name: catalog-db-secret
               mountPath: /etc/secret/catalog-db-secret
@@ -71,9 +73,11 @@ spec:
           image: "{{ .Values.ui.image }}"
           resources:
             requests:
-              memory: "512Mi"
+              memory: "{{ .Values.ui.resources.requests.memory }}"
+              cpu: "{{ .Values.ui.resources.requests.cpu }}"
             limits:
-              memory: "512Mi"
+              memory: "{{ .Values.ui.resources.limits.memory }}"
+              cpu: "{{ .Values.ui.resources.limits.cpu }}"
           env:
             - name: BACKEND_HOST
               value: "catalog-api"
@@ -147,9 +151,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              memory: "1Gi"
+              memory: "{{ .Values.backend.resources.requests.memory }}"
+              cpu: "{{ .Values.backend.resources.requests.cpu }}"
             limits:
-              memory: "1Gi"
+              memory: "{{ .Values.backend.resources.limits.memory }}"
+              cpu: "{{ .Values.backend.resources.limits.cpu }}"
       volumes:
         - name: catalog-secret
           secret:
