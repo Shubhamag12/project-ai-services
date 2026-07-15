@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "catalog"
+  name: "catalog-backend"
   labels:
     ai-services.io/application: {{ .Release.Name }}
     ai-services.io/template: {{ .Chart.Name }}
@@ -11,14 +11,14 @@ spec:
   selector:
     matchLabels:
       ai-services.io/application: {{ .Release.Name }}
-      ai-services.io/component: catalog
+      ai-services.io/component: catalog-backend
   template:
     metadata:
       labels:
         ai-services.io/application: {{ .Release.Name }}
         ai-services.io/template: {{ .Chart.Name }}
         ai-services.io/version: {{ default .Chart.AppVersion | quote }}
-        ai-services.io/component: catalog
+        ai-services.io/component: catalog-backend
     spec:
       automountServiceAccountToken: false
       initContainers:
@@ -38,7 +38,7 @@ spec:
 
                 if /usr/bin/ai-services catalog dbmigrate init \
                   --runtime={{ .Values.backend.runtime }} \
-                  --db-host=postgres \
+                  --db-host=catalog-db \
                   --db-port=5432 \
                   --db-user={{ .Values.db.user }} \
                   --db-password="${DB_PASSWORD}" \
@@ -70,39 +70,6 @@ spec:
               memory: "512Mi"
               cpu: "{{ .Values.backend.resources.limits.cpu }}"
       containers:
-        - name: ui
-          image: "{{ .Values.ui.image }}"
-          resources:
-            requests:
-              memory: "{{ .Values.ui.resources.requests.memory }}"
-              cpu: "{{ .Values.ui.resources.requests.cpu }}"
-            limits:
-              memory: "{{ .Values.ui.resources.limits.memory }}"
-              cpu: "{{ .Values.ui.resources.limits.cpu }}"
-          env:
-            - name: BACKEND_HOST
-              value: "catalog-api"
-            - name: BACKEND_PORT
-              value: "8080"
-          ports:
-            - containerPort: 8081
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8081
-            initialDelaySeconds: 10
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8081
-            initialDelaySeconds: 10
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
         - name: backend
           image: "{{ .Values.backend.image }}"
           command:
@@ -131,7 +98,7 @@ spec:
             - name: AI_SERVICES_LOG_FORMAT
               value: "service"
             - name: DB_HOST
-              value: "postgres"
+              value: "catalog-db"
             - name: DB_PORT
               value: "5432"
             - name: DB_USER

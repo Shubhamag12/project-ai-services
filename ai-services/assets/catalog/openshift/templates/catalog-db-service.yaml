@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: "postgres-headless"
+  name: "catalog-db-headless"
   labels:
     ai-services.io/application: {{ .Release.Name }}
     ai-services.io/template: {{ .Chart.Name }}
@@ -24,7 +24,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "postgres"
+  name: "catalog-db"
   labels:
     ai-services.io/application: {{ .Release.Name }}
     ai-services.io/template: {{ .Chart.Name }}
