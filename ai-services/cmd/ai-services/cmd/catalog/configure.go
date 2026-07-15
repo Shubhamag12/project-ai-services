@@ -58,6 +58,10 @@ SSL/TLS certificate management, HTTPS port configuration, and credential/certifi
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
 
+		if err := common.InitAndValidateRuntimeFlag(runtimeType); err != nil {
+			return err
+		}
+
 		// Reject runtime-scoped flags early.
 		if err := buildFlagValidator().Validate(cmd); err != nil {
 			return err
@@ -111,10 +115,6 @@ func runConfigure() error {
 }
 
 func validateResetFlag(cmd *cobra.Command, flagName string) error {
-	if err := common.InitAndValidateRuntimeFlag(runtimeType); err != nil {
-		return err
-	}
-
 	// Check that no configuration parameters are provided with reset flag
 	var invalidFlags []string
 	cmd.Flags().Visit(func(f *pflag.Flag) {
@@ -131,12 +131,8 @@ func validateResetFlag(cmd *cobra.Command, flagName string) error {
 	return nil
 }
 
-// validateConfigureFlags validates the configure command flags and initializes runtime.
+// validateConfigureFlags validates the configure command flags.
 func validateConfigureFlags() error {
-	if err := common.InitAndValidateRuntimeFlag(runtimeType); err != nil {
-		return err
-	}
-
 	// Validate SSL flags
 	if vars.RuntimeFactory.GetRuntimeType() == types.RuntimeTypePodman {
 		if err := validateSSLFlags(); err != nil {
@@ -206,10 +202,6 @@ func validateSSLCertificates() error {
 }
 
 func validateResetCertificateFlags(cmd *cobra.Command, flagName string) error {
-	if err := common.InitAndValidateRuntimeFlag(runtimeType); err != nil {
-		return err
-	}
-
 	// Require SSL certificate flags with reset-certificate
 	if sslCertPath == "" || sslKeyPath == "" {
 		return fmt.Errorf("--ssl-cert and --ssl-key are required when using --reset-certificate")
