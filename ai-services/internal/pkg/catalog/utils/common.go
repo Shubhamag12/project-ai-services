@@ -22,6 +22,11 @@ type PodmanConfigureOptions struct {
 	HttpsPort   int
 }
 
+// OpenShiftConfigureOptions contains the configuration for configuring the catalog service on OpenShift runtime.
+type OpenshiftConfigureOptions struct {
+	Namespace string
+}
+
 // GetCatalogPodConfig retrieves catalog pod configuration by inspecting the running pod and its containers.
 // It extracts environment variables like AI_SERVICES_BASE_DIR, DOMAIN_SUFFIX, and CADDY_HTTPS_PORT.
 func GetCatalogPodConfig(rt runtime.Runtime) (*PodmanConfigureOptions, string, error) {

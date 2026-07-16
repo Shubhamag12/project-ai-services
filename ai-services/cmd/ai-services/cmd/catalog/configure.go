@@ -10,7 +10,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/project-ai-services/ai-services/cmd/ai-services/cmd/catalog/common"
+	catalogOpenShift "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/openshift"
 	catalogPodman "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/podman"
+	catalogConstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/flagvalidator"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
@@ -142,7 +144,11 @@ func runConfigure() error {
 		return catalogPodman.DeployCatalog(ctx, opts)
 
 	case types.RuntimeTypeOpenShift:
-		return fmt.Errorf("openshift runtime is not yet supported for catalog configure")
+		opts := catalogUtils.OpenshiftConfigureOptions{
+			Namespace: catalogConstants.CatalogAppName,
+		}
+
+		return catalogOpenShift.DeployCatalog(ctx, opts)
 
 	default:
 		return fmt.Errorf("unsupported runtime type: %s", rt)
