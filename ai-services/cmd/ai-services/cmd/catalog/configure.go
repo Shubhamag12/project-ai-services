@@ -1,15 +1,17 @@
 package catalog
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/project-ai-services/ai-services/cmd/ai-services/cmd/catalog/common"
-	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure"
 	catalogPodman "github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure/podman"
+	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/flagvalidator"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
@@ -20,16 +22,23 @@ import (
 // Variables for flags placeholder.
 var (
 	// common flags.
-	runtimeType       string
+	// Runtime type flag for catalog configure command.
+	runtimeType string
+	// Reset password flag for catalog configure command.
 	resetPasswordFlag bool
 
 	// podman flags.
-	baseDir              string
-	domainName           string
-	sslCertPath          string
-	sslKeyPath           string
-	httpsPort            int
-	resetPodmanAuthFlag  bool
+	// Base directory flag for catalog configure command.
+	baseDir string
+	// SSL certificate flags for HTTPS configuration.
+	domainName  string
+	sslCertPath string
+	sslKeyPath  string
+	// HTTPS port flag for catalog configure command.
+	httpsPort int
+	// Reset podman auth secret for catalog configure command.
+	resetPodmanAuthFlag bool
+	// Reset certificate flag for catalog configure command.
 	resetCertificateFlag bool
 )
 
@@ -102,16 +111,56 @@ func init() {
 
 // runConfigure executes the catalog configuration process.
 func runConfigure() error {
-	return configure.Run(configure.ConfigureOptions{
-		Runtime: vars.RuntimeFactory.GetRuntimeType(),
-		Podman: catalogPodman.PodmanConfigureOptions{
+	rt := vars.RuntimeFactory.GetRuntimeType()
+	ctx := context.Background()
+	// Deploy catalog service based on runtime
+	switch rt {
+	case types.RuntimeTypePodman:
+		// Resolve base directory: fall back to default when not provided.
+		aiServicesDir, err := resolveBaseDir(baseDir)
+		if err != nil {
+			return err
+		}
+
+		// Create the models directory under the base dir.
+		modelPath := filepath.Join(aiServicesDir, "models")
+		if err := utils.CreateDir(modelPath); err != nil {
+			return fmt.Errorf("failed to create model directory: %w", err)
+		}
+
+		// Sanitize SSL paths to prevent path-traversal attacks.
+		cleanCertPath, cleanKeyPath := sanitizeSSLPaths(sslCertPath, sslKeyPath)
+
+		opts := catalogUtils.PodmanConfigureOptions{
 			BaseDir:     baseDir,
 			DomainName:  domainName,
-			SSLCertPath: sslCertPath,
-			SSLKeyPath:  sslKeyPath,
+			SSLCertPath: cleanCertPath,
+			SSLKeyPath:  cleanKeyPath,
 			HttpsPort:   httpsPort,
-		},
-	})
+		}
+
+		return catalogPodman.DeployCatalog(ctx, opts)
+
+	case types.RuntimeTypeOpenShift:
+		return fmt.Errorf("openshift runtime is not yet supported for catalog configure")
+
+	default:
+		return fmt.Errorf("unsupported runtime type: %s", rt)
+	}
+}
+
+// resolveBaseDir returns the validated base directory, falling back to the default.
+func resolveBaseDir(baseDir string) (string, error) {
+	if baseDir == "" {
+		return constants.DefaultBaseDir, nil
+	}
+
+	resolved, err := utils.ValidateBaseDir(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid base directory '%s': %w", baseDir, err)
+	}
+
+	return resolved, nil
 }
 
 func validateResetFlag(cmd *cobra.Command, flagName string) error {
@@ -231,7 +280,10 @@ func validateResetCertificateFlags(cmd *cobra.Command, flagName string) error {
 }
 
 func runResetCertificate() error {
-	return catalogPodman.ResetCatalogCertificate(sslCertPath, sslKeyPath)
+	// Sanitize SSL certificate paths to prevent path traversal attacks
+	cleanCertPath, cleanKeyPath := sanitizeSSLPaths(sslCertPath, sslKeyPath)
+
+	return catalogPodman.ResetCatalogCertificate(cleanCertPath, cleanKeyPath)
 }
 
 func initConfigureCommonFlags() {
@@ -350,6 +402,20 @@ func runResetPassword() error {
 
 func runResetPodmanAuth() error {
 	return catalogPodman.ResetPodmanAuth()
+}
+
+// sanitizeSSLPaths cleans SSL cert/key paths to prevent path-traversal attacks.
+// Returns empty strings unchanged (filepath.Clean("") returns ".").
+func sanitizeSSLPaths(certPath, keyPath string) (string, string) {
+	cleanCert, cleanKey := "", ""
+	if certPath != "" {
+		cleanCert = filepath.Clean(certPath)
+	}
+	if keyPath != "" {
+		cleanKey = filepath.Clean(keyPath)
+	}
+
+	return cleanCert, cleanKey
 }
 
 // Made with Bob
