@@ -17,10 +17,6 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
 
-const (
-	defaultPasswordIterations = 100000
-)
-
 // DeployCatalog deploys the catalog service using the assets/catalog template for podman runtime.
 func DeployCatalog(ctx context.Context, opts catalogUtils.PodmanConfigureOptions) error {
 	// Create deployment context without argParams for status check
@@ -31,7 +27,7 @@ func DeployCatalog(ctx context.Context, opts catalogUtils.PodmanConfigureOptions
 
 	// Collect and hash password
 	// If secret exist passwordHash will be empty
-	passwordHash, err := collectAndHashPassword(deployCtx.Runtime)
+	passwordHash, err := catalogUtils.CollectAndHashPassword(deployCtx.Runtime)
 	if err != nil {
 		return err
 	}
