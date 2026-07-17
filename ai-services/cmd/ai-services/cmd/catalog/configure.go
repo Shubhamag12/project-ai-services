@@ -128,14 +128,11 @@ func runConfigure() error {
 			return fmt.Errorf("failed to create model directory: %w", err)
 		}
 
-		// Sanitize SSL paths to prevent path-traversal attacks.
-		cleanCertPath, cleanKeyPath := sanitizeSSLPaths(sslCertPath, sslKeyPath)
-
 		opts := catalogUtils.PodmanConfigureOptions{
 			BaseDir:     baseDir,
 			DomainName:  domainName,
-			SSLCertPath: cleanCertPath,
-			SSLKeyPath:  cleanKeyPath,
+			SSLCertPath: sanitizeSSLPaths(sslCertPath),
+			SSLKeyPath:  sanitizeSSLPaths(sslKeyPath),
 			HttpsPort:   httpsPort,
 		}
 
@@ -280,10 +277,8 @@ func validateResetCertificateFlags(cmd *cobra.Command, flagName string) error {
 }
 
 func runResetCertificate() error {
-	// Sanitize SSL certificate paths to prevent path traversal attacks
-	cleanCertPath, cleanKeyPath := sanitizeSSLPaths(sslCertPath, sslKeyPath)
 	// Call ResetCatalogCertificate with certificate paths
-	return catalogPodman.ResetCatalogCertificate(cleanCertPath, cleanKeyPath)
+	return catalogPodman.ResetCatalogCertificate(sanitizeSSLPaths(sslCertPath), sanitizeSSLPaths(sslKeyPath))
 }
 
 func initConfigureCommonFlags() {
@@ -405,17 +400,13 @@ func runResetPodmanAuth() error {
 }
 
 // sanitizeSSLPaths cleans SSL cert/key paths to prevent path-traversal attacks.
-// Returns empty strings unchanged (filepath.Clean("") returns ".").
-func sanitizeSSLPaths(certPath, keyPath string) (string, string) {
-	cleanCert, cleanKey := "", ""
-	if certPath != "" {
-		cleanCert = filepath.Clean(certPath)
-	}
-	if keyPath != "" {
-		cleanKey = filepath.Clean(keyPath)
+func sanitizeSSLPaths(path string) string {
+	cleanPath := ""
+	if path != "" {
+		cleanPath = filepath.Clean(path)
 	}
 
-	return cleanCert, cleanKey
+	return cleanPath
 }
 
 // Made with Bob
