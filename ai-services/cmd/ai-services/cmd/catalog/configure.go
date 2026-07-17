@@ -144,7 +144,7 @@ func runConfigure() error {
 		return catalogPodman.DeployCatalog(ctx, opts)
 
 	case types.RuntimeTypeOpenShift:
-		opts := catalogUtils.OpenshiftConfigureOptions{
+		opts := catalogUtils.OpenShiftConfigureOptions{
 			Namespace: catalogConstants.CatalogAppName,
 		}
 
@@ -403,7 +403,16 @@ func buildFlagValidator() *flagvalidator.FlagValidator {
 }
 
 func runResetPassword() error {
-	return catalogPodman.ResetCatalogPassword()
+	rt := vars.RuntimeFactory.GetRuntimeType()
+	switch rt {
+	case types.RuntimeTypePodman:
+		return catalogPodman.ResetCatalogPassword()
+
+	case types.RuntimeTypeOpenShift:
+		return catalogOpenShift.ResetCatalogPassword()
+	}
+
+	return nil
 }
 
 func runResetPodmanAuth() error {

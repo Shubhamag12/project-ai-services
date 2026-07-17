@@ -23,7 +23,7 @@ type PodmanConfigureOptions struct {
 }
 
 // OpenShiftConfigureOptions contains the configuration for configuring the catalog service on OpenShift runtime.
-type OpenshiftConfigureOptions struct {
+type OpenShiftConfigureOptions struct {
 	Namespace string
 }
 

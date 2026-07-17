@@ -20,7 +20,7 @@ import (
 )
 
 // DeployCatalog deploys the catalog service to OpenShift using the Helm chart.
-func DeployCatalog(ctx context.Context, opts catalogutils.OpenshiftConfigureOptions) error {
+func DeployCatalog(ctx context.Context, opts catalogutils.OpenShiftConfigureOptions) error {
 	logger.Infof("Deploying catalog service to OpenShift in namespace '%s'\n", opts.Namespace)
 
 	tp := templates.NewEmbedTemplateProvider(&assets.CatalogFS, "")
