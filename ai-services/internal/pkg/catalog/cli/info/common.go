@@ -3,6 +3,7 @@ package info
 import (
 	"fmt"
 
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/info/openshift"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/info/podman"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 )
@@ -13,7 +14,7 @@ func Run(runtimeType types.RuntimeType) error {
 	case types.RuntimeTypePodman:
 		return podman.DisplayCatalogInfo()
 	case types.RuntimeTypeOpenShift:
-		return fmt.Errorf("catalog info is not yet supported for OpenShift runtime")
+		return openshift.DisplayCatalogInfo()
 	default:
 		return fmt.Errorf("unsupported runtime type: %s", runtimeType)
 	}
