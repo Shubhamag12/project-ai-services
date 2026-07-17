@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"syscall"
 
-	"golang.org/x/term"
 	catalogConstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/term"
 )
 
 const defaultPasswordIterations = 100000
