@@ -131,8 +131,8 @@ func runConfigure() error {
 		opts := catalogUtils.PodmanConfigureOptions{
 			BaseDir:     baseDir,
 			DomainName:  domainName,
-			SSLCertPath: sanitizeSSLPaths(sslCertPath),
-			SSLKeyPath:  sanitizeSSLPaths(sslKeyPath),
+			SSLCertPath: catalogUtils.SanitizePaths(sslCertPath),
+			SSLKeyPath:  catalogUtils.SanitizePaths(sslKeyPath),
 			HttpsPort:   httpsPort,
 		}
 
@@ -278,7 +278,7 @@ func validateResetCertificateFlags(cmd *cobra.Command, flagName string) error {
 
 func runResetCertificate() error {
 	// Call ResetCatalogCertificate with certificate paths
-	return catalogPodman.ResetCatalogCertificate(sanitizeSSLPaths(sslCertPath), sanitizeSSLPaths(sslKeyPath))
+	return catalogPodman.ResetCatalogCertificate(catalogUtils.SanitizePaths(sslCertPath), catalogUtils.SanitizePaths(sslKeyPath))
 }
 
 func initConfigureCommonFlags() {
@@ -397,16 +397,6 @@ func runResetPassword() error {
 
 func runResetPodmanAuth() error {
 	return catalogPodman.ResetPodmanAuth()
-}
-
-// sanitizeSSLPaths cleans SSL cert/key paths to prevent path-traversal attacks.
-func sanitizeSSLPaths(path string) string {
-	cleanPath := ""
-	if path != "" {
-		cleanPath = filepath.Clean(path)
-	}
-
-	return cleanPath
 }
 
 // Made with Bob
