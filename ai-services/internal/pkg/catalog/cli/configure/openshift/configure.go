@@ -9,6 +9,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/assets"
 	catalogconstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure"
 	catalogutils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/templates"
@@ -125,7 +126,7 @@ func prepareValues(tp templates.Template, rt *runtimeOpenshift.OpenshiftClient, 
 
 func generateArgParams(rt *runtimeOpenshift.OpenshiftClient, passwordHash string) (map[string]string, error) {
 	argParams := make(map[string]string)
-	argParams["backend.adminPasswordHash"] = passwordHash
+	argParams[configure.ArgParamAdminPasswordHash] = passwordHash
 
 	dbSecretExists, err := rt.SecretExists(catalogDBSecretName)
 	if err != nil {
@@ -138,7 +139,7 @@ func generateArgParams(rt *runtimeOpenshift.OpenshiftClient, passwordHash string
 			return nil, fmt.Errorf("failed to generate database password: %w", err)
 		}
 
-		argParams["db.password"] = dbPassword
+		argParams[configure.ArgParamDBPassword] = dbPassword
 	}
 
 	return argParams, nil

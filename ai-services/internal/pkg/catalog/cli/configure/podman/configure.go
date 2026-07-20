@@ -9,6 +9,7 @@ import (
 
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/common/podman/caddy"
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/common/podman/deploy"
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure"
 	catalogconstants "github.com/project-ai-services/ai-services/internal/pkg/catalog/constants"
 	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
@@ -195,12 +196,12 @@ func generateArgParams(passwordHash string, httpsPort int) (map[string]string, e
 
 	// Set configure-specific values
 	argParams := make(map[string]string)
-	argParams["backend.adminPasswordHash"] = passwordHash
-	argParams["backend.runtime"] = "podman"
-	argParams["backend.podman.authFileContent"] = authFileBase64
-	argParams["backend.podman.uri"] = podmanSocketPath
-	argParams["db.password"] = dbPassword
-	argParams["caddy.httpsPort"] = fmt.Sprintf("%d", httpsPort)
+	argParams[configure.ArgParamAdminPasswordHash] = passwordHash
+	argParams[configure.ArgParamRuntime] = "podman"
+	argParams[configure.ArgParamPodmanAuthFileContent] = authFileBase64
+	argParams[configure.ArgParamPodmanURI] = podmanSocketPath
+	argParams[configure.ArgParamDBPassword] = dbPassword
+	argParams[configure.ArgParamCaddyHTTPSPort] = fmt.Sprintf("%d", httpsPort)
 
 	return argParams, nil
 }

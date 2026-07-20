@@ -21,7 +21,7 @@ backend:
       cpu: "1000m"
 
 db:
-  image: icr.io/ai-services-cicd/postgres:18-3
+  image: icr.io/ai-services-cicd/postgres:18-4
   user: "admin"
   database: "ai_services"
   password: ""
