@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: "instruct-predictor"
+  name: "llm-predictor"
   labels:
     ai-services.io/component: {{ .Release.Name }}
     ai-services.io/template: {{ .Chart.Name }}
@@ -9,7 +9,7 @@ metadata:
 spec:
   selector:
     ai-services.io/component: {{ .Release.Name }}
-    ai-services.io/name: instruct
+    ai-services.io/name: llm
   ports:
     - name: http
       port: 8000

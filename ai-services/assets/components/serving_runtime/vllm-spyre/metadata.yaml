@@ -1,0 +1,5 @@
+id: serving-runtime-llm-spyre
+name: vLLM Spyre ServingRuntime
+description: KServe ServingRuntime for vLLM Spyre inference on OpenShift
+type: component
+component_type: serving_runtime

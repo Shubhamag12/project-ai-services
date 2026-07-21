@@ -1,4 +1,4 @@
-instruct:
+llm:
   storageUri: hf://ibm-granite/granite-3.3-8b-instruct
   apiKey: ""
   model:

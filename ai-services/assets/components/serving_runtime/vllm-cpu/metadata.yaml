@@ -1,0 +1,5 @@
+id: serving-runtime-llm-cpu
+name: vLLM CPU ServingRuntime
+description: KServe ServingRuntime for vLLM CPU inference on OpenShift
+type: component
+component_type: serving_runtime

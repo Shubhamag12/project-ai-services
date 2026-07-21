@@ -137,10 +137,16 @@ func (b *ParamBuilder) loadServiceValues(
 		return fmt.Errorf("failed to load service values: %w", err)
 	}
 
-	// Merge component values under component_type keys
 	// This allows templates to access component values via .Values.<component_type>.<field>
+	// OpenShift component values.yaml files wrap their values under the component_type key
+	// (e.g. "embedding: { model: { name: ... } }"). Unwrap that top-level key before merging
+	// to avoid double-nesting (values["embedding"]["embedding"]["model"]).
 	for componentType, compParams := range componentParams {
-		values[componentType] = compParams.Values
+		if nested, ok := compParams.Values[componentType].(map[string]any); ok {
+			values[componentType] = nested
+		} else {
+			values[componentType] = compParams.Values
+		}
 	}
 
 	params.Values = values

@@ -21,15 +21,15 @@ spec:
       modelFormat:
         name: vLLM
       args:
-        - --served-model-name={{ .Values.instruct.model.name }}
-        - --max-model-len={{ .Values.instruct.model.maxModelLen }}
-        - --max-num-seqs={{ .Values.instruct.model.maxBatchSize }}
+        - --served-model-name={{ .Values.llm.model.name }}
+        - --max-model-len={{ .Values.llm.model.maxModelLen }}
+        - --max-num-seqs={{ .Values.llm.model.maxBatchSize }}
       env:
         - name: VLLM_CPU_OMP_THREADS_BIND
           value: "auto"
         - name: VLLM_CPU_KVCACHE_SPACE
           value: "32"
-      {{- if .Values.instruct.apiKey }}
+      {{- if .Values.llm.apiKey }}
         - name: VLLM_API_KEY
           valueFrom:
             secretKeyRef:
@@ -38,10 +38,10 @@ spec:
       {{- end }}
       resources:
         requests:
-          cpu: {{ .Values.instruct.resources.requests.cpu | quote }}
-          memory: {{ .Values.instruct.resources.requests.memory | quote }}
+          cpu: {{ .Values.llm.resources.requests.cpu | quote }}
+          memory: {{ .Values.llm.resources.requests.memory | quote }}
         limits:
-          cpu: {{ .Values.instruct.resources.limits.cpu | quote }}
-          memory: {{ .Values.instruct.resources.limits.memory | quote }}
+          cpu: {{ .Values.llm.resources.limits.cpu | quote }}
+          memory: {{ .Values.llm.resources.limits.memory | quote }}
       runtime: cpu-temp
-      storageUri: {{ .Values.instruct.storageUri }}
+      storageUri: {{ .Values.llm.storageUri }}
