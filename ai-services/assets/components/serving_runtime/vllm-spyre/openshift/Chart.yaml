@@ -1,7 +1,0 @@
-apiVersion: v2
-name: serving-runtime-llm-spyre
-description: A Helm chart for deploying the vLLM Spyre ServingRuntime on OpenShift
-type: application
-
-version: 0.0.1
-appVersion: "0.0.1"

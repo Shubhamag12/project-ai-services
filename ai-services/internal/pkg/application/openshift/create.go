@@ -102,7 +102,6 @@ func deployApp(ctx context.Context, chart chart.Charter, timeout time.Duration, 
 	s := spinner.New("Deploying application '" + app + "'...")
 
 	s.Start(ctx)
-
 	// Create a new Helm client
 	helmClient, err := helm.NewHelm(namespace)
 	if err != nil {
