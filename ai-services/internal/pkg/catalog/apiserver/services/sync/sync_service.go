@@ -329,8 +329,8 @@ func (s *SyncService) syncAllServices(ctx context.Context, rt runtime.Runtime, a
 // syncServicePod syncs a single service's pod status
 // Returns: error message (if any) and error.
 func (s *SyncService) syncServicePod(ctx context.Context, rt runtime.Runtime, service models.Service) (string, error) {
-	// Fetch all pods using service ID as template label
-	pods, err := s.runtimeSync.FetchPodStatuses(rt, service.ID.String())
+	// Fetch all pods using service catalog ID + UUID as resource reference
+	pods, err := s.runtimeSync.FetchPodStatuses(rt, ResourceRef{UUID: service.ID.String(), CatalogID: service.CatalogID})
 	if err != nil {
 		return s.handleServicePodFetchError(ctx, service, err)
 	}
@@ -411,14 +411,14 @@ func (s *SyncService) updateServiceStatusIfChanged(ctx context.Context, service 
 func (s *SyncService) syncComponentPod(ctx context.Context, rt runtime.Runtime, component *models.Component) (models.ComponentStatus, string, error) {
 	componentID := component.ID
 
-	// Fetch all pods using component ID as template label
-	pods, err := s.runtimeSync.FetchPodStatuses(rt, componentID.String())
+	// Build component catalogID in format "type/provider"
+	componentCatalogID := fmt.Sprintf("%s/%s", component.Type, component.Provider)
+
+	// Fetch all pods using component catalog ID + UUID as resource reference
+	pods, err := s.runtimeSync.FetchPodStatuses(rt, ResourceRef{UUID: componentID.String(), CatalogID: component.Type})
 	if err != nil {
 		return s.handleComponentPodFetchError(ctx, component, componentID, err)
 	}
-
-	// Build component catalogID in format "type/provider"
-	componentCatalogID := fmt.Sprintf("%s/%s", component.Type, component.Provider)
 
 	// Validate resource counts against templates
 	resourceValidationMsg := s.validateResourceCounts(ctx, componentCatalogID, componentID.String(), resourceItemTypeComponent, len(pods), rt)

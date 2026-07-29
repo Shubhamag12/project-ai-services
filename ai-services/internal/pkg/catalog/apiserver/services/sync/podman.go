@@ -17,16 +17,16 @@ func newPodmanSync() *podmanSync {
 	return &podmanSync{}
 }
 
-// FetchPodStatuses fetches all pods labelled with the given templateID and returns their statuses.
+// FetchPodStatuses fetches all pods labelled with ref.UUID and returns their statuses.
 // It uses InspectPod and InspectContainer (via common.ProcessPod) to derive state and health.
-func (s *podmanSync) FetchPodStatuses(rt runtime.Runtime, templateID string) ([]*PodStatus, error) {
-	filteredPods, err := common.FetchFilteredPods(rt, templateID)
+func (s *podmanSync) FetchPodStatuses(rt runtime.Runtime, ref ResourceRef) ([]*PodStatus, error) {
+	filteredPods, err := common.FetchFilteredPods(rt, ref.UUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pods: %w", err)
 	}
 
 	if len(filteredPods) == 0 {
-		return nil, fmt.Errorf("no pod found with template ID: %s", templateID)
+		return nil, fmt.Errorf("no pod found with template ID: %s", ref.UUID)
 	}
 
 	var podStatuses []*PodStatus
