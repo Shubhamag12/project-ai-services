@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	defaultHelmTimeout    = 10 * time.Minute
-	endpointTypeLabelKey  = "ai-services.io/endpoint-type"
-	defaultEndpointType   = "service"
+	defaultHelmTimeout   = 10 * time.Minute
+	endpointTypeLabelKey = "ai-services.io/endpoint-type"
+	defaultEndpointType  = "service"
 )
 
 // Type aliases for deployment plan types.
