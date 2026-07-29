@@ -236,5 +236,3 @@ func loadChartFromCatalogFS(catalogPath string) (helmchart.Charter, error) {
 
 	return loader.LoadFiles(files)
 }
-
-
