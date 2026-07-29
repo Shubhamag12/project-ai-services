@@ -4,16 +4,27 @@
   "properties": {
     "llm": {
       "type": "object",
-      "required": ["watsonxApiKey", "watsonxProjectId", "watsonxUrl"],
+      "required": [
+        "watsonxApiKey",
+        "watsonxProjectId",
+        "watsonxUrl"
+      ],
       "properties": {
-        "image": { "type": "string" },
-        "model": { "type": "string", "minLength": 1 },
-        "watsonxApiKey": { "type": "string", "minLength": 44, "maxLength": 44 },
-        "watsonxProjectId": { "type": "string" },
-        "watsonxUrl": { "type": "string" },
-        "maxModelLen": { "type": "integer", "minimum": 1 },
-        "maxBatchSize": { "type": "integer", "minimum": 1 },
-        "resources": { "type": "object" }
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "watsonxApiKey": {
+          "type": "string",
+          "minLength": 44,
+          "maxLength": 44
+        },
+        "watsonxProjectId": {
+          "type": "string"
+        },
+        "watsonxUrl": {
+          "type": "string"
+        }
       }
     }
   }

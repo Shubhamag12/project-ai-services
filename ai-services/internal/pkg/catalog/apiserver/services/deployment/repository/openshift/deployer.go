@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,33 +64,33 @@ func (d *OpenShiftDeployer) ExecuteDeployment(
 	plan *DeploymentPlan,
 	_ apimodels.CreateApplicationRequest,
 ) error {
-	ns := appNamespace(plan.ApplicationID)
+	ns := catalogutils.AppNamespace(plan.ApplicationID)
 
 	logger.InfofCtx(ctx, "Starting OpenShift deployment for '%s' in namespace '%s'\n",
 		plan.ApplicationName, ns)
 
 	// Update application status to Deploying
-	if err := catalogutils.UpdateApplicationStatus(ctx, d.appRepo, plan.ApplicationID, models.ApplicationStatusDeploying, deployingStatusMessage(plan)); err != nil {
+	if err := catalogutils.UpdateApplicationStatus(ctx, d.appRepo, plan.ApplicationID, models.ApplicationStatusDeploying, catalogutils.DeployingStatusMessage(plan.IsArchitecture)); err != nil {
 		logger.ErrorfCtx(ctx, "Failed to update application status to Deploying: %v\n", err)
 	}
 
 	// Phase 0: Deploy prerequisites (ServingRuntimes etc.), idempotent, once per namespace
 	if err := d.deployPrerequisites(ctx, ns); err != nil {
-		d.handleStepError(ctx, plan.ApplicationID, "Prerequisites deployment failed", err)
+		catalogutils.HandleDeploymentStepError(ctx, d.appRepo, plan.ApplicationID, "Prerequisites deployment failed", err)
 
 		return err
 	}
 
 	// Phase 1: Deploy components concurrently via Helm
 	if err := d.deployComponentsConcurrently(ctx, ns, plan); err != nil {
-		d.handleStepError(ctx, plan.ApplicationID, "Component deployment failed", err)
+		catalogutils.HandleDeploymentStepError(ctx, d.appRepo, plan.ApplicationID, "Component deployment failed", err)
 
 		return err
 	}
 
 	// Phase 2: Deploy services concurrently via Helm.
 	if err := d.deployServicesConcurrently(ctx, ns, plan); err != nil {
-		d.handleStepError(ctx, plan.ApplicationID, "Service deployment failed", err)
+		catalogutils.HandleDeploymentStepError(ctx, d.appRepo, plan.ApplicationID, "Service deployment failed", err)
 
 		return err
 	}
@@ -139,91 +138,59 @@ func (d *OpenShiftDeployer) deployPrerequisites(ctx context.Context, ns string) 
 // deployComponentsConcurrently installs all component Helm charts in parallel and waits for all
 // to become Ready before returning.
 func (d *OpenShiftDeployer) deployComponentsConcurrently(ctx context.Context, ns string, plan *DeploymentPlan) error {
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(plan.Components))
-
+	// Build hash → dbID index so RunConcurrently can track status per component.
+	items := make(map[string]uuid.UUID, len(plan.Components))
 	for hash, comp := range plan.Components {
-		wg.Add(1)
-
-		go func(h string, c *ComponentPlan) {
-			defer wg.Done()
-
-			logger.InfofCtx(ctx, "Deploying component %s/%s (hash=%s)\n", c.ComponentType, c.ProviderID, h)
-
-			if err := d.deployComponent(ctx, ns, plan, c); err != nil {
-				errMsg := fmt.Sprintf("Component deployment failed: %v", err)
-				if updateErr := catalogutils.UpdateComponentStatus(ctx, d.componentRepo, c.DatabaseID, models.ComponentStatusError, errMsg); updateErr != nil {
-					logger.ErrorfCtx(ctx, "Failed to update component status: %v\n", updateErr)
-				}
-				errCh <- fmt.Errorf("failed to deploy component %s/%s: %w", c.ComponentType, c.ProviderID, err)
-
-				return
-			}
-
-			if err := catalogutils.UpdateComponentStatus(ctx, d.componentRepo, c.DatabaseID, models.ComponentStatusRunning, "Component deployed successfully"); err != nil {
-				logger.ErrorfCtx(ctx, "Failed to update component status to Running: %v\n", err)
-			}
-		}(hash, comp)
+		items[hash] = comp.DatabaseID
 	}
 
-	wg.Wait()
-	close(errCh)
-
-	var errs []error
-	for err := range errCh {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("component deployment errors: %v", errs)
-	}
-
-	return nil
+	return catalogutils.RunConcurrently(
+		ctx,
+		items,
+		func(ctx context.Context, hash string) error {
+			return d.deployComponent(ctx, ns, plan, plan.Components[hash])
+		},
+		func(ctx context.Context, dbID uuid.UUID, msg string) error {
+			return catalogutils.UpdateComponentStatus(ctx, d.componentRepo, dbID, models.ComponentStatusError, msg)
+		},
+		func(ctx context.Context, dbID uuid.UUID, msg string) error {
+			return catalogutils.UpdateComponentStatus(ctx, d.componentRepo, dbID, models.ComponentStatusRunning, msg)
+		},
+	)
 }
 
 // deployComponent installs or upgrades the Helm chart for a single component.
 func (d *OpenShiftDeployer) deployComponent(ctx context.Context, ns string, plan *DeploymentPlan, comp *ComponentPlan) error {
-	return helmInstallOrUpgrade(ctx, ns, releaseName(plan, strings.ReplaceAll(comp.ComponentType, "_", "-")), comp.CatalogPath, comp.Values)
+	return helmInstallOrUpgrade(ctx, ns, catalogutils.HelmReleaseName(plan.ApplicationID, strings.ReplaceAll(comp.ComponentType, "_", "-")), comp.CatalogPath, comp.Values)
 }
 
 // deployServicesConcurrently installs all service Helm charts in parallel and waits for all pods
 // to become Ready.
 func (d *OpenShiftDeployer) deployServicesConcurrently(ctx context.Context, ns string, plan *DeploymentPlan) error {
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(plan.Services))
-
+	// Build id → dbID index so RunConcurrently can track status per service.
+	items := make(map[string]uuid.UUID, len(plan.Services))
 	for id, svc := range plan.Services {
-		wg.Add(1)
-
-		go func(serviceID string, s *ServicePlan) {
-			defer wg.Done()
-
-			logger.InfofCtx(ctx, "Deploying service %s\n", serviceID)
-
-			if err := d.deployService(ctx, ns, plan, s); err != nil {
-				errCh <- fmt.Errorf("failed to deploy service %s: %w", serviceID, err)
-			}
-		}(id, svc)
+		items[id] = svc.DatabaseID
 	}
 
-	wg.Wait()
-	close(errCh)
-
-	var errs []error
-	for err := range errCh {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("service deployment errors: %v", errs)
-	}
-
-	return nil
+	return catalogutils.RunConcurrently(
+		ctx,
+		items,
+		func(ctx context.Context, id string) error {
+			return d.deployService(ctx, ns, plan, plan.Services[id])
+		},
+		func(ctx context.Context, dbID uuid.UUID, msg string) error {
+			return catalogutils.UpdateServiceStatus(ctx, d.serviceRepo, dbID, models.ServiceStatusError, msg)
+		},
+		func(ctx context.Context, dbID uuid.UUID, msg string) error {
+			return catalogutils.UpdateServiceStatus(ctx, d.serviceRepo, dbID, models.ServiceStatusRunning, msg)
+		},
+	)
 }
 
 // deployService installs or upgrades the Helm chart for a single service.
 func (d *OpenShiftDeployer) deployService(ctx context.Context, ns string, plan *DeploymentPlan, svc *ServicePlan) error {
-	return helmInstallOrUpgrade(ctx, ns, releaseName(plan, svc.CatalogID), svc.CatalogPath, svc.Values)
+	return helmInstallOrUpgrade(ctx, ns, catalogutils.HelmReleaseName(plan.ApplicationID, svc.CatalogID), svc.CatalogPath, svc.Values)
 }
 
 // helmInstallOrUpgrade loads the chart at catalogPath from the embedded CatalogFS and
@@ -241,16 +208,7 @@ func helmInstallOrUpgrade(ctx context.Context, namespace, release, catalogPath s
 		return fmt.Errorf("failed to create Helm client: %w", err)
 	}
 
-	exists, err := helmClient.IsReleaseExist(release)
-	if err != nil {
-		return fmt.Errorf("failed to check release existence: %w", err)
-	}
-
-	if !exists {
-		return helmClient.Install(release, chart, &helm.InstallOpts{Values: values, Timeout: defaultHelmTimeout})
-	}
-
-	return helmClient.Upgrade(release, chart, &helm.UpgradeOpts{Values: values, Timeout: defaultHelmTimeout})
+	return helmClient.InstallOrUpgrade(release, chart, values, defaultHelmTimeout)
 }
 
 // loadChartFromCatalogFS walks assets.CatalogFS at catalogPath and returns a Helm chart.
@@ -279,31 +237,4 @@ func loadChartFromCatalogFS(catalogPath string) (helmchart.Charter, error) {
 	return loader.LoadFiles(files)
 }
 
-// handleStepError updates the application status to Error on a deployment step failure.
-func (d *OpenShiftDeployer) handleStepError(ctx context.Context, appID uuid.UUID, stepContext string, err error) {
-	errMsg := fmt.Sprintf("%s: %v", stepContext, err)
-	if updateErr := catalogutils.UpdateApplicationStatus(ctx, d.appRepo, appID, models.ApplicationStatusError, errMsg); updateErr != nil {
-		logger.ErrorfCtx(ctx, "Failed to update application status: %v\n", updateErr)
-	}
-}
 
-// appNamespace derives the Kubernetes namespace from the application UUID.
-// Format: "ai-services-<first 8 chars of UUID>".
-func appNamespace(appID interface{ String() string }) string {
-	return "ai-services-" + appID.String()[:8]
-}
-
-// releaseName builds a Helm release name: "<id>-<first 8 chars of appID>".
-// e.g. "llm-2b4410e6", "vector-store-2b4410e6", "chat-c08f9a8b".
-func releaseName(plan *DeploymentPlan, id string) string {
-	return id + "-" + plan.ApplicationID.String()[:8]
-}
-
-// deployingStatusMessage returns the human-readable deploying status message.
-func deployingStatusMessage(plan *DeploymentPlan) string {
-	if plan.IsArchitecture {
-		return "Deploying digital assistant"
-	}
-
-	return "Deploying service"
-}
