@@ -414,8 +414,8 @@ func (s *SyncService) syncComponentPod(ctx context.Context, rt runtime.Runtime, 
 	// Build component catalogID in format "type/provider"
 	componentCatalogID := fmt.Sprintf("%s/%s", component.Type, component.Provider)
 
-	// OpenShift Helm chart names use "<type>-<provider>" with underscores replaced by hyphens
-	// (e.g. component type "vector_db", provider "opensearch" → chart name "vector-db-opensearch").
+	// OpenShift Helm chart names follow "<type>-<provider>" with underscores replaced by hyphens,
+	// matching the ai-services.io/template label value stamped on pods via {{ .Chart.Name }}.
 	componentChartName := strings.ReplaceAll(component.Type, "_", "-") + "-" + component.Provider
 
 	// Fetch all pods using component catalog ID + UUID as resource reference
@@ -694,6 +694,9 @@ func (s *SyncService) extractResourceLabelsFromPodSpec(podSpec *modelpkg.PodSpec
 // validateResourceCounts validates that actual resources match expected counts from templates.
 // Returns error message if validation fails, empty string if all resources are present.
 func (s *SyncService) validateResourceCounts(ctx context.Context, catalogID, instanceID, itemType string, actualPodCount int, rt runtime.Runtime) string {
+	if vars.RuntimeFactory.GetRuntimeType() != runtimeTypes.RuntimeTypePodman {
+		return ""
+	}
 	// Cache key combines catalogID and instanceID:
 	cacheKey := catalogID + ":" + instanceID
 	expectedCounts := s.getExpectedResourceCounts(cacheKey)
@@ -718,9 +721,10 @@ func (s *SyncService) validateResourceCounts(ctx context.Context, catalogID, ins
 			fmt.Sprintf("Pod count mismatch: expected %d, found %d", expectedCounts.Pods, actualPodCount))
 	}
 
-	// Validate secrets and volumes exist
+	// Validate secrets and volumes exist by checking pod labels
+	// If pods are running with these labels, the secrets/volumes must exist
 	if len(expectedCounts.SecretNames) > 0 || len(expectedCounts.VolumeNames) > 0 {
-		resourceValidationMsg := s.runtimeSync.ValidateResources(ctx, expectedCounts.SecretNames, expectedCounts.VolumeNames, rt)
+		resourceValidationMsg := s.validateResourcesFromPodLabels(ctx, expectedCounts.SecretNames, expectedCounts.VolumeNames, rt)
 		if resourceValidationMsg != "" {
 			errorMessages = append(errorMessages, resourceValidationMsg)
 		}
@@ -728,6 +732,63 @@ func (s *SyncService) validateResourceCounts(ctx context.Context, catalogID, ins
 
 	if len(errorMessages) > 0 {
 		return strings.Join(errorMessages, "; ")
+	}
+
+	return ""
+}
+
+// validateResourcesFromPodLabels validates that secrets and volumes referenced in templates exist
+// by checking the runtime for their existence.
+func (s *SyncService) validateResourcesFromPodLabels(ctx context.Context, expectedSecretNames, expectedVolumeNames []string, rt runtime.Runtime) string {
+	if len(expectedSecretNames) == 0 && len(expectedVolumeNames) == 0 {
+		return ""
+	}
+
+	var errorMessages []string
+
+	// Validate secrets
+	if secretMsg := s.validateSecrets(ctx, expectedSecretNames, rt); secretMsg != "" {
+		errorMessages = append(errorMessages, secretMsg)
+	}
+
+	// Validate volumes
+	if volumeMsg := s.validateVolumes(ctx, expectedVolumeNames, rt); volumeMsg != "" {
+		errorMessages = append(errorMessages, volumeMsg)
+	}
+
+	if len(errorMessages) > 0 {
+		return strings.Join(errorMessages, "; ")
+	}
+
+	return ""
+}
+
+// validateSecrets validates that expected secrets exist in runtime.
+func (s *SyncService) validateSecrets(ctx context.Context, expectedSecretNames []string, rt runtime.Runtime) string {
+	return s.validateResourceExistence(ctx, expectedSecretNames, "secret", rt.SecretExists)
+}
+
+// validateVolumes validates that expected volumes exist in runtime.
+func (s *SyncService) validateVolumes(ctx context.Context, expectedVolumeNames []string, rt runtime.Runtime) string {
+	return s.validateResourceExistence(ctx, expectedVolumeNames, "volume", rt.VolumeExists)
+}
+
+// validateResourceExistence is a generic helper to validate resource existence.
+func (s *SyncService) validateResourceExistence(ctx context.Context, resourceNames []string, resourceType string, existsFunc func(string) (bool, error)) string {
+	var missingResources []string
+	for _, resourceName := range resourceNames {
+		exists, err := existsFunc(resourceName)
+		if err != nil {
+			logger.ErrorfCtx(ctx, "Failed to check %s existence for %s: %v", resourceType, resourceName, err)
+
+			continue
+		}
+		if !exists {
+			missingResources = append(missingResources, resourceName)
+		}
+	}
+	if len(missingResources) > 0 {
+		return fmt.Sprintf("Missing %ss: %s", resourceType, strings.Join(missingResources, ", "))
 	}
 
 	return ""

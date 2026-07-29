@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/constants"
@@ -63,11 +62,6 @@ func derivePodHealth(pod *runtimetypes.Pod) string {
 	}
 
 	return string(constants.Ready)
-}
-
-// ValidateResources checks that the expected Kubernetes Secrets and PVCs (volumes) exist.
-func (s *openShiftSync) ValidateResources(ctx context.Context, expectedSecretNames, expectedVolumeNames []string, rt runtime.Runtime) string {
-	return validateResources(ctx, expectedSecretNames, expectedVolumeNames, rt)
 }
 
 // Ensure openShiftSync implements RuntimeSync at compile time.

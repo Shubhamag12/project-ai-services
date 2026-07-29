@@ -1,4 +1,4 @@
-name: vector-db-opensearch
+name: vector-store-opensearch
 version: "1.0.0"
 
 # Resource requirements

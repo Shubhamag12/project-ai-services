@@ -1,11 +1,8 @@
 package sync
 
 import (
-	"context"
 	"fmt"
-	"strings"
 
-	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/common"
 )
@@ -48,54 +45,6 @@ func (s *podmanSync) FetchPodStatuses(rt runtime.Runtime, ref ResourceRef) ([]*P
 	}
 
 	return podStatuses, nil
-}
-
-// ValidateResources checks that the expected Podman secrets and volumes exist.
-func (s *podmanSync) ValidateResources(ctx context.Context, expectedSecretNames, expectedVolumeNames []string, rt runtime.Runtime) string {
-	return validateResources(ctx, expectedSecretNames, expectedVolumeNames, rt)
-}
-
-// validateResources is shared by both syncer implementations.
-func validateResources(ctx context.Context, expectedSecretNames, expectedVolumeNames []string, rt runtime.Runtime) string {
-	if len(expectedSecretNames) == 0 && len(expectedVolumeNames) == 0 {
-		return ""
-	}
-
-	var errorMessages []string
-
-	if msg := validateResourceExistence(ctx, expectedSecretNames, "secret", rt.SecretExists); msg != "" {
-		errorMessages = append(errorMessages, msg)
-	}
-
-	if msg := validateResourceExistence(ctx, expectedVolumeNames, "volume", rt.VolumeExists); msg != "" {
-		errorMessages = append(errorMessages, msg)
-	}
-
-	return strings.Join(errorMessages, "; ")
-}
-
-// validateResourceExistence is a generic helper to validate resource existence via the provided lookup func.
-func validateResourceExistence(ctx context.Context, resourceNames []string, resourceType string, existsFunc func(string) (bool, error)) string {
-	var missing []string
-
-	for _, name := range resourceNames {
-		exists, err := existsFunc(name)
-		if err != nil {
-			logger.ErrorfCtx(ctx, "Failed to check %s existence for %s: %v", resourceType, name, err)
-
-			continue
-		}
-
-		if !exists {
-			missing = append(missing, name)
-		}
-	}
-
-	if len(missing) == 0 {
-		return ""
-	}
-
-	return fmt.Sprintf("missing %s(s): %s", resourceType, strings.Join(missing, ", "))
 }
 
 // Ensure podmanSync implements RuntimeSync at compile time.
