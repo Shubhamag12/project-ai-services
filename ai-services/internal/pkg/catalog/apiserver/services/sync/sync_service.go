@@ -192,7 +192,7 @@ func (s *SyncService) performSync(ctx context.Context) {
 // 3. Update application status based on collected errors.
 func (s *SyncService) syncApplication(ctx context.Context, app *models.Application) error {
 	// Initialize runtime client
-	rt, err := vars.RuntimeFactory.Create("")
+	rt, err := vars.RuntimeFactory.Create(catalogutils.AppNamespace(app.ID))
 	if err != nil {
 		return fmt.Errorf("failed to create runtime client: %w", err)
 	}
@@ -414,8 +414,12 @@ func (s *SyncService) syncComponentPod(ctx context.Context, rt runtime.Runtime, 
 	// Build component catalogID in format "type/provider"
 	componentCatalogID := fmt.Sprintf("%s/%s", component.Type, component.Provider)
 
+	// OpenShift Helm chart names use "<type>-<provider>" with underscores replaced by hyphens
+	// (e.g. component type "vector_db", provider "opensearch" → chart name "vector-db-opensearch").
+	componentChartName := strings.ReplaceAll(component.Type, "_", "-") + "-" + component.Provider
+
 	// Fetch all pods using component catalog ID + UUID as resource reference
-	pods, err := s.runtimeSync.FetchPodStatuses(rt, ResourceRef{UUID: componentID.String(), CatalogID: component.Type})
+	pods, err := s.runtimeSync.FetchPodStatuses(rt, ResourceRef{UUID: componentID.String(), CatalogID: componentChartName})
 	if err != nil {
 		return s.handleComponentPodFetchError(ctx, component, componentID, err)
 	}
