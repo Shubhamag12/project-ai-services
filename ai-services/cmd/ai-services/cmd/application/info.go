@@ -15,7 +15,6 @@ import (
 	catalogTypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	cliUtils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
-	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
 
@@ -47,9 +46,8 @@ Arguments:
 
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
-		// When legacyInfo is true and runtime is podman, use the older/stable code path
-		// For openshift runtime, always use the older/stable code path regardless of legacy flag
-		if legacyInfo && rt == types.RuntimeTypePodman {
+		// When legacyInfo is true, use the older code path
+		if legacyInfo {
 			// Create application instance using factory
 			factory := application.NewFactory(rt)
 			app, err := factory.Create(applicationName)
@@ -65,23 +63,7 @@ Arguments:
 		}
 
 		// Default: use new implementation using catalog
-		// For openshift runtime, always use the older/stable code path
-		if rt == types.RuntimeTypePodman {
-			return renderApplicationInfo(applicationName)
-		}
-
-		// OpenShift runtime uses the older implementation
-		factory := application.NewFactory(rt)
-		app, err := factory.Create(applicationName)
-		if err != nil {
-			return fmt.Errorf("failed to create application instance: %w", err)
-		}
-
-		opts := appTypes.InfoOptions{
-			Name: applicationName,
-		}
-
-		return app.Info(opts)
+		return renderApplicationInfo(applicationName)
 	},
 }
 
@@ -154,7 +136,7 @@ func printServicesInfo(services []catalogTypes.ApplicationService, appPS *catalo
 			return fmt.Errorf("failed to load service md files: %w", err)
 		}
 
-		err = printInfo(tmpls, params, service.CatalogID)
+		err = printInfo(tmpls, params)
 		if err != nil {
 			return fmt.Errorf("failed to load application info: %w", err)
 		}
@@ -191,7 +173,7 @@ func getContainerStatus(services []catalogTypes.Pod, catalogID string) (string, 
 	return uiStatus, apiStatus
 }
 
-func printInfo(tmpls map[string]*template.Template, params map[string]string, appTemplate string) error {
+func printInfo(tmpls map[string]*template.Template, params map[string]string) error {
 	tmpl, ok := tmpls["info.md"]
 	if !ok {
 		logger.Warningf("failed to find info.md template")
