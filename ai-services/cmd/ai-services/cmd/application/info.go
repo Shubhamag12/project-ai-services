@@ -15,6 +15,7 @@ import (
 	catalogTypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	cliUtils "github.com/project-ai-services/ai-services/internal/pkg/cli/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
+	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/vars"
 )
 
@@ -47,7 +48,8 @@ Arguments:
 		rt := vars.RuntimeFactory.GetRuntimeType()
 
 		// When legacyInfo is true, use the older code path
-		if legacyInfo {
+		// For openshift runtime, existing implementation of application info works.
+		if legacyInfo || rt == types.RuntimeTypeOpenShift {
 			// Create application instance using factory
 			factory := application.NewFactory(rt)
 			app, err := factory.Create(applicationName)
@@ -62,7 +64,7 @@ Arguments:
 			return app.Info(opts)
 		}
 
-		// Default: use new implementation using catalog
+		// Default: use new implementation for podman using catalog
 		return renderApplicationInfo(applicationName)
 	},
 }
