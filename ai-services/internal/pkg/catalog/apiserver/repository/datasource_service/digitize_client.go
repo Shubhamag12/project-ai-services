@@ -50,7 +50,7 @@ func (c *digitizeClientAdapter) Connect(ctx context.Context, baseURL string, req
 
 // Disconnect calls DELETE /v1/connectors/{connectorID} on the given Digitize base URL.
 func (c *digitizeClientAdapter) Disconnect(ctx context.Context, baseURL, connectorID string) error {
-	url := baseURL + digitizeConnectPath + "/"
+	url := baseURL + digitizeConnectPath + "/" + connectorID
 	callCtx, cancel := context.WithTimeout(ctx, digitizeHTTPTimeout)
 	defer cancel()
 
