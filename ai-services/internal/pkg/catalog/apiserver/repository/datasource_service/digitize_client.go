@@ -48,6 +48,34 @@ func (c *digitizeClientAdapter) Connect(ctx context.Context, baseURL string, req
 	return doDigitizePost(ctx, baseURL+digitizeConnectPath, body)
 }
 
+// Disconnect calls DELETE /v1/connectors/{connectorID} on the given Digitize base URL.
+func (c *digitizeClientAdapter) Disconnect(ctx context.Context, baseURL, connectorID string) error {
+	url := baseURL + digitizeConnectPath + "/"
+	callCtx, cancel := context.WithTimeout(ctx, digitizeHTTPTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(callCtx, http.MethodDelete, url, http.NoBody)
+	if err != nil {
+		return fmt.Errorf("failed to create digitize delete request: %w", err)
+	}
+
+	resp, err := digitizeClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("digitize DELETE request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Drain and discard the body to allow connection reuse.
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	// 204 No Content is the expected success status; also accept 200/202.
+	if resp.StatusCode != http.StatusNoContent && (resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices) {
+		return fmt.Errorf("digitize service returned unexpected status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 // doDigitizePost executes a single POST call to the digitize service.
 func doDigitizePost(ctx context.Context, url string, body []byte) error {
 	callCtx, cancel := context.WithTimeout(ctx, digitizeHTTPTimeout)

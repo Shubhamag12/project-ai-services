@@ -36,6 +36,12 @@ type ConnectDatasourcesRequest struct {
 	DatasourceIDs []string `json:"datasource_ids" binding:"required,min=1"`
 }
 
+// DisconnectDatasourcesRequest is the request body for disconnecting one or more datasources from an application.
+type DisconnectDatasourcesRequest struct {
+	// DatasourceIDs is the list of datasource connector UUIDs to disconnect.
+	DatasourceIDs []string `json:"datasource_ids" binding:"required,min=1"`
+}
+
 // CreateDatasourceResponse is the response body returned after a successful datasource creation.
 type CreateDatasourceResponse struct {
 	ID string `json:"id"`
@@ -52,6 +58,18 @@ type DatasourceConnectionItem struct {
 type ConnectDatasourcesResponse struct {
 	ApplicationID string                     `json:"application_id"`
 	Connections   []DatasourceConnectionItem `json:"connections"`
+}
+
+// DatasourceDisconnectionItem is the per-datasource result within a DisconnectDatasourcesResponse.
+type DatasourceDisconnectionItem struct {
+	DatasourceID string `json:"datasource_id"`
+	Error        string `json:"error,omitempty"`
+}
+
+// DisconnectDatasourcesResponse is the response body returned after disconnecting datasources from an application.
+type DisconnectDatasourcesResponse struct {
+	ApplicationID  string                        `json:"application_id"`
+	Disconnections []DatasourceDisconnectionItem `json:"disconnections"`
 }
 
 // DatasourceProviderInfo is the provider sub-object embedded in datasource API responses.

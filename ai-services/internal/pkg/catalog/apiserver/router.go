@@ -105,6 +105,8 @@ func registerApplicationRoutes(v1 *gin.RouterGroup, h *handlers.ApplicationHandl
 		g.GET("/:id/ps", h.ApplicationPS)
 		// PUT /api/v1/applications/:id/datasources — connect one or more datasources to application
 		g.PUT("/:id/datasources", datasourceH.ConnectDatasourcesToApplication)
+		// DELETE /api/v1/applications/:id/datasources — disconnect one or more datasources from application
+		g.DELETE("/:id/datasources", datasourceH.DisconnectDatasourcesFromApplication)
 	}
 }
 

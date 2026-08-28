@@ -34,6 +34,8 @@ type ValidationError = validators.ValidationError
 // so the router wiring can reference it without importing this package directly.
 type DigitizeClientInterface interface {
 	Connect(ctx context.Context, baseURL string, req apimodels.ConnectDatasourceRequest) error
+	// Disconnect calls DELETE /v1/connectors/{connectorID} on the Digitize service.
+	Disconnect(ctx context.Context, baseURL, connectorID string) error
 }
 
 // DatasourceService is the single implementation of the create-datasource and connect-datasource flows.
@@ -616,6 +618,69 @@ func (s *DatasourceService) sendToService(
 
 	if depErr := s.svcDepRepo.AddDependency(ctx, dep); depErr != nil {
 		logger.ErrorfCtx(ctx, "failed to record connector dependency for service %s: %v", svc.ServiceID, depErr)
+	}
+
+	return nil
+}
+
+// DisconnectDatasourcesFromApplication removes one or more datasource connectors from each
+// eligible service in a running application, then removes the service_dependency rows.
+//
+// Flow:
+//  1. Resolve eligible services for the application (same filter as connect).
+//  2. For each datasource ID: call DELETE /v1/connectors/{id} on each eligible service's
+//     Digitize endpoint, then remove the service_dependency row.
+//  3. Return a per-datasource result list — failures are non-fatal and surfaced in the item.
+func (s *DatasourceService) DisconnectDatasourcesFromApplication(ctx context.Context, applicationID uuid.UUID, datasourceIDs []uuid.UUID) (*apimodels.DisconnectDatasourcesResponse, error) {
+	linkedServices, err := s.eligibleServicesForApp(ctx, applicationID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(linkedServices) == 0 {
+		return nil, &ValidationError{
+			Code:    http.StatusUnprocessableEntity,
+			Message: "no eligible running service with an API endpoint found in application",
+		}
+	}
+
+	disconnections := make([]apimodels.DatasourceDisconnectionItem, 0, len(datasourceIDs))
+
+	for _, datasourceID := range datasourceIDs {
+		item := apimodels.DatasourceDisconnectionItem{DatasourceID: datasourceID.String()}
+
+		if disconnectErr := s.disconnectOneDatasource(ctx, datasourceID, linkedServices); disconnectErr != nil {
+			item.Error = disconnectErr.Error()
+		}
+
+		disconnections = append(disconnections, item)
+	}
+
+	return &apimodels.DisconnectDatasourcesResponse{
+		ApplicationID:  applicationID.String(),
+		Disconnections: disconnections,
+	}, nil
+}
+
+// disconnectOneDatasource calls DELETE /v1/connectors/{id} on each eligible service and
+// removes the service_dependency row for the connector. Errors from the Digitize call are
+// returned immediately; dependency removal failures are logged but do not block the caller.
+func (s *DatasourceService) disconnectOneDatasource(ctx context.Context, datasourceID uuid.UUID, linkedServices []dbrepo.LinkedServiceRow) error {
+	for _, svc := range linkedServices {
+		if svc.URL == "" {
+			continue
+		}
+
+		if err := s.digitizeClient.Disconnect(ctx, svc.URL, datasourceID.String()); err != nil {
+			return &ValidationError{
+				Code:    http.StatusBadGateway,
+				Message: fmt.Sprintf("failed to disconnect datasource from service %s: %v", svc.ServiceCatalogID, err),
+			}
+		}
+
+		if err := s.svcDepRepo.RemoveDependency(ctx, svc.ServiceID, datasourceID); err != nil {
+			logger.ErrorfCtx(ctx, "failed to remove connector dependency for service %s: %v", svc.ServiceID, err)
+		}
 	}
 
 	return nil

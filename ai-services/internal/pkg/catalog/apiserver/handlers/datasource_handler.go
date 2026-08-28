@@ -293,4 +293,74 @@ func (h *DatasourceHandler) ConnectDatasourcesToApplication(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// DisconnectDatasourcesFromApplication godoc
+//
+//	@Summary		Disconnect datasources from application
+//	@Description	Removes one or more datasource connectors from each eligible (Digitize) service in a running application and deletes the service_dependency records. Each datasource is processed independently; failures are surfaced per item.
+//	@Tags			Datasources
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id		path		string									true	"Application ID (UUID)"
+//	@Param			request	body		models.DisconnectDatasourcesRequest		true	"List of datasource IDs to disconnect"
+//	@Success		200		{object}	models.DisconnectDatasourcesResponse	"Datasources disconnected"
+//	@Failure		400		{object}	ErrorResponse							"Invalid request body"
+//	@Failure		401		{object}	ErrorResponse							"Unauthorized"
+//	@Failure		404		{object}	ErrorResponse							"Application not found"
+//	@Failure		422		{object}	ErrorResponse							"No eligible running service found"
+//	@Failure		500		{object}	ErrorResponse							"Internal Server Error"
+//	@Router			/applications/{id}/datasources [delete]
+func (h *DatasourceHandler) DisconnectDatasourcesFromApplication(c *gin.Context) {
+	applicationID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: fmt.Sprintf("Invalid application ID: %v", err),
+		})
+
+		return
+	}
+
+	var req models.DisconnectDatasourcesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: fmt.Sprintf("Invalid request body: %v", err),
+		})
+
+		return
+	}
+
+	// Parse each string UUID into uuid.UUID.
+	datasourceIDs := make([]uuid.UUID, 0, len(req.DatasourceIDs))
+	for _, idStr := range req.DatasourceIDs {
+		id, parseErr := uuid.Parse(idStr)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: fmt.Sprintf("Invalid datasource ID %q: %v", idStr, parseErr),
+			})
+
+			return
+		}
+
+		datasourceIDs = append(datasourceIDs, id)
+	}
+
+	resp, err := h.datasourceSvc.DisconnectDatasourcesFromApplication(c.Request.Context(), applicationID, datasourceIDs)
+	if err != nil {
+		if valErr, ok := err.(*repository.ValidationError); ok {
+			c.JSON(valErr.Code, ErrorResponse{Error: valErr.Message})
+
+			return
+		}
+
+		logger.ErrorfCtx(c.Request.Context(), "failed to disconnect datasources from application: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: "Failed to disconnect datasources from application",
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // Made with Bob

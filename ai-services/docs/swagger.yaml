@@ -136,6 +136,13 @@ definitions:
       error:
         type: string
     type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DatasourceDisconnectionItem:
+    properties:
+      datasource_id:
+        type: string
+      error:
+        type: string
+    type: object
   github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DatasourceListResponse:
     properties:
       data:
@@ -172,6 +179,26 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DisconnectDatasourcesRequest:
+    properties:
+      datasource_ids:
+        description: DatasourceIDs is the list of datasource connector UUIDs to disconnect.
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - datasource_ids
+    type: object
+  github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DisconnectDatasourcesResponse:
+    properties:
+      application_id:
+        type: string
+      disconnections:
+        items:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DatasourceDisconnectionItem'
+        type: array
     type: object
   github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.GetDatasourceResponse:
     properties:
@@ -1043,6 +1070,56 @@ paths:
       tags:
       - Applications
   /applications/{id}/datasources:
+    delete:
+      consumes:
+      - application/json
+      description: Removes one or more datasource connectors from each eligible (Digitize)
+        service in a running application and deletes the service_dependency records.
+        Each datasource is processed independently; failures are surfaced per item.
+      parameters:
+      - description: Application ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: List of datasource IDs to disconnect
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DisconnectDatasourcesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Datasources disconnected
+          schema:
+            $ref: '#/definitions/github_com_project-ai-services_ai-services_internal_pkg_catalog_apiserver_models.DisconnectDatasourcesResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "404":
+          description: Application not found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "422":
+          description: No eligible running service found
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_pkg_catalog_apiserver_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Disconnect datasources from application
+      tags:
+      - Datasources
     put:
       consumes:
       - application/json
