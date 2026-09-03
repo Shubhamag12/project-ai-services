@@ -11,6 +11,7 @@ import (
 	"net"
 	"time"
 
+	workerconstants "github.com/project-ai-services/ai-services/internal/pkg/worker/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	workerpb "github.com/project-ai-services/ai-services/internal/pkg/worker/proto"
 	"github.com/project-ai-services/ai-services/internal/pkg/worker/registry"
@@ -96,18 +97,43 @@ func (g *Gateway) runSweeper(ctx context.Context) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Register implements WorkerGatewayServer. Workers call this once at bootstrap.
-// The worker name is taken from the token, not from the request — the worker
-// cannot self-assign a name different from what was pre-registered by an admin.
+//
+// Normal path: the worker name is recovered from the single-use bootstrap token
+// issued by `catalog worker register`; the worker cannot self-assign a different name.
+//
+// Local-worker path: when the request carries an empty pre_shared_token and
+// worker_name == workerconstants.LocalWorkerName ("local"), the gateway
+// self-issues the pre-registration and registers the worker directly — no
+// external token management is required.  This is used by `catalog configure`
+// which joins the same host as a local worker automatically.
+//
 // Metadata supplied in the request is persisted to the DB metadata JSON column.
 func (g *Gateway) Register(ctx context.Context, req *workerpb.RegisterRequest) (*workerpb.RegisterResponse, error) {
 	logger.InfofCtx(ctx, "WorkerGateway: Register request received")
 
-	// Validate token and recover the pre-registered worker name.
-	workerName, err := g.registry.ValidateToken(req.GetPreSharedToken())
-	if err != nil {
-		logger.WarningfCtx(ctx, "WorkerGateway: rejected registration: %v", err)
+	var workerName string
 
-		return nil, fmt.Errorf("registration rejected: %w", err)
+	if req.GetPreSharedToken() == "" && req.GetWorkerName() == workerconstants.LocalWorkerName {
+		// Local-worker bypass: catalog and worker share the same host.
+		// Self-issue the pre-registration so we can call Register without a token.
+		logger.DebuglnCtx(ctx, "WorkerGateway: local worker detected — bypassing token validation")
+
+		if _, err := g.registry.Preregister(ctx, workerconstants.LocalWorkerName); err != nil {
+			logger.WarningfCtx(ctx, "WorkerGateway: local preregister: %v (continuing)", err)
+		}
+
+		workerName = workerconstants.LocalWorkerName
+	} else {
+		// Normal path: validate the single-use bootstrap token and recover the
+		// pre-registered worker name bound to it.
+		var err error
+
+		workerName, err = g.registry.ValidateToken(req.GetPreSharedToken())
+		if err != nil {
+			logger.WarningfCtx(ctx, "WorkerGateway: rejected registration: %v", err)
+
+			return nil, fmt.Errorf("registration rejected: %w", err)
+		}
 	}
 
 	if _, err := g.registry.Register(ctx, workerName, req.GetRuntimeType(), req.GetMetadata()); err != nil {

@@ -24,6 +24,7 @@ const (
 )
 
 // DeployCatalog deploys the catalog service using the assets/catalog template for podman runtime.
+// joined as the reserved "Local" worker after the catalog is up.
 func DeployCatalog(ctx context.Context, opts catalogUtils.PodmanConfigureOptions) error {
 	// Create deployment context without argParams for status check
 	deployCtx, err := deploy.NewDeployContext()
@@ -48,7 +49,18 @@ func DeployCatalog(ctx context.Context, opts catalogUtils.PodmanConfigureOptions
 		return err
 	}
 
-	return handlePostDeployment(ctx, caddyCtx, deployCtx)
+	if err := handlePostDeployment(ctx, caddyCtx, deployCtx); err != nil {
+		return err
+	}
+
+	if !opts.SkipLocalWorker {
+		if err := JoinAsLocalWorker(ctx, opts); err != nil {
+			// Non-fatal: catalog is up; operator can re-run configure or join manually.
+			logger.WarningfCtx(ctx, "local worker join failed: %v\n", err)
+		}
+	}
+
+	return nil
 }
 
 func executeCatalogDeployment(ctx context.Context, deployCtx *deploy.DeployContext, opts catalogUtils.PodmanConfigureOptions, passwordHash string) (*caddy.Context, error) {

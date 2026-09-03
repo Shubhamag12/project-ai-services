@@ -31,6 +31,7 @@ import (
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime/types"
 	workercaddy "github.com/project-ai-services/ai-services/internal/pkg/worker/caddy"
+	workerconstants "github.com/project-ai-services/ai-services/internal/pkg/worker/constants"
 	"github.com/project-ai-services/ai-services/internal/pkg/worker/dispatch"
 	workerpb "github.com/project-ai-services/ai-services/internal/pkg/worker/proto"
 	workertypes "github.com/project-ai-services/ai-services/internal/pkg/worker/types"
@@ -52,6 +53,10 @@ const (
 
 // StartGrpcStream dials the catalog gRPC worker-gateway, registers with the
 // bootstrap token, and holds the CommandStream open.
+//
+// When opts.Token is empty the gateway applies the local-bypass registration
+// path: the worker name is set to workerconstants.LocalWorkerName so the
+// gateway can identify it as the co-located local worker.
 func StartGrpcStream(ctx context.Context, rt runtime.Runtime, pr *workercaddy.ProxyRouter, opts workertypes.GrpcStreamOptions) error {
 	// ── Step 1: Dial the gateway ─────────────────────────────────────────────
 	logger.InfofCtx(ctx, "Connecting to catalog gateway at %s...\n", opts.GatewayAddr)
@@ -64,8 +69,14 @@ func StartGrpcStream(ctx context.Context, rt runtime.Runtime, pr *workercaddy.Pr
 
 	client := workerpb.NewWorkerGatewayClient(conn)
 
+	// Derive the requested worker name: empty token means local worker.
+	requestedWorkerName := ""
+	if opts.Token == "" {
+		requestedWorkerName = workerconstants.LocalWorkerName
+	}
+
 	// ── Step 2: Register + stream loop ───────────────────────────────────────
-	return runRegistrationLoop(ctx, rt, pr, client, opts.Token)
+	return runRegistrationLoop(ctx, rt, pr, client, opts.Token, requestedWorkerName)
 }
 
 // ─── registration loop ────────────────────────────────────────────────────────
@@ -73,8 +84,8 @@ func StartGrpcStream(ctx context.Context, rt runtime.Runtime, pr *workercaddy.Pr
 // runRegistrationLoop calls Register and then enters the CommandStream retry
 // loop.  If the stream comes back with codes.Unauthenticated it re-registers
 // before reconnecting.
-func runRegistrationLoop(ctx context.Context, rt runtime.Runtime, pr *workercaddy.ProxyRouter, client workerpb.WorkerGatewayClient, token string) error {
-	workerName, err := register(ctx, client, token, rt.Type())
+func runRegistrationLoop(ctx context.Context, rt runtime.Runtime, pr *workercaddy.ProxyRouter, client workerpb.WorkerGatewayClient, token, requestedWorkerName string) error {
+	workerName, err := register(ctx, client, token, requestedWorkerName, rt.Type())
 	if err != nil {
 		return fmt.Errorf("worker join: register: %w", err)
 	}
@@ -86,10 +97,16 @@ func runRegistrationLoop(ctx context.Context, rt runtime.Runtime, pr *workercadd
 
 // register calls the Register RPC once and returns the worker name bound by
 // the control plane.
-func register(ctx context.Context, client workerpb.WorkerGatewayClient, token string, rt types.RuntimeType) (string, error) {
+//
+// requestedWorkerName is forwarded in the RegisterRequest.worker_name field.
+// For normal (token-authenticated) workers the gateway ignores it and derives
+// the name from the token.  For local workers (empty token) the gateway uses
+// it to trigger the local-bypass path.
+func register(ctx context.Context, client workerpb.WorkerGatewayClient, token, requestedWorkerName string, rt types.RuntimeType) (string, error) {
 	logger.InfolnCtx(ctx, "Registering worker with catalog control plane...")
 
 	resp, err := client.Register(ctx, &workerpb.RegisterRequest{
+		WorkerName:     requestedWorkerName,
 		PreSharedToken: token,
 		RuntimeType:    rt.String(),
 	})

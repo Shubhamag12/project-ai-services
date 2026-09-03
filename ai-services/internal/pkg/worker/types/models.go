@@ -9,6 +9,7 @@ type WorkerConnectionOptions struct {
 
 	// Token is the single-use bootstrap token issued by
 	// `ai-services catalog worker register`.
+	// Leave empty for the local worker (same host as the catalog);
 	Token string
 }
 
