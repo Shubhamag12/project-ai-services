@@ -259,6 +259,13 @@ func initConfigurePodmanFlags() {
 }
 
 func initConfigurePodmanDeployFlags() {
+	initConfigurePodmanBaseDirFlag()
+	initConfigurePodmanPortFlags()
+	initConfigurePodmanSSLFlags()
+	initConfigurePodmanWorkerFlags()
+}
+
+func initConfigurePodmanBaseDirFlag() {
 	configureCmd.Flags().StringVar(
 		&baseDir,
 		"basedir",
@@ -267,7 +274,9 @@ func initConfigurePodmanDeployFlags() {
 			"Note: Supported for podman runtime only.\n"+
 			"Example: --basedir /custom/path\n",
 	)
+}
 
+func initConfigurePodmanPortFlags() {
 	configureCmd.Flags().IntVar(
 		&httpsPort,
 		"https-port",
@@ -285,7 +294,9 @@ func initConfigurePodmanDeployFlags() {
 			"Note: Supported for podman runtime only.\n"+
 			"Example: --workergateway-port 9090\n",
 	)
+}
 
+func initConfigurePodmanSSLFlags() {
 	configureCmd.Flags().StringVar(
 		&domainName,
 		"domain-name",
@@ -317,7 +328,9 @@ func initConfigurePodmanDeployFlags() {
 			"Note: Supported for podman runtime only.\n"+
 			"Example: --ssl-key /path/to/key.pem\n",
 	)
+}
 
+func initConfigurePodmanWorkerFlags() {
 	configureCmd.Flags().BoolVar(
 		&skipLocalWorkerFlag,
 		"skip-local-worker",
