@@ -2,11 +2,16 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	catalogtypes "github.com/project-ai-services/ai-services/internal/pkg/catalog/types"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
 )
+
+// ErrWorkerNotFound is returned by DeleteWorkerByName when no worker with the
+// given name is registered.
+var ErrWorkerNotFound = errors.New("worker not found")
 
 // API route constants for worker endpoints.
 const (
@@ -99,7 +104,7 @@ func (c *WorkerClient) DeleteWorkerByName(ctx context.Context, name string) erro
 		}
 	}
 
-	return fmt.Errorf("worker %q not found", name)
+	return fmt.Errorf("%w: %q", ErrWorkerNotFound, name)
 }
 
 // deleteWorkerByID permanently removes a worker by its UUID string.

@@ -2,8 +2,10 @@ package podman
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	catalogUtils "github.com/project-ai-services/ai-services/internal/pkg/catalog/utils"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	podmanruntime "github.com/project-ai-services/ai-services/internal/pkg/runtime/podman"
@@ -20,6 +22,17 @@ import (
 // LOCAL_WORKER=true, so no token needs to live in any TokenStore.
 func JoinAsLocalWorker(ctx context.Context, rt *podmanruntime.PodmanClient, opts catalogUtils.PodmanConfigureOptions) error {
 	logger.InfolnCtx(ctx, "Joining this machine as the Local worker...")
+
+	c, err := client.NewWorkerClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := c.DeleteWorkerByName(ctx, workerconstants.LocalWorkerName); err != nil {
+		if !errors.Is(err, client.ErrWorkerNotFound) {
+			return err
+		}
+	}
 
 	gatewayAddr := fmt.Sprintf("%s:%d", workerconstants.PodmanGatewayPodName, opts.WorkerGatewayPort)
 
