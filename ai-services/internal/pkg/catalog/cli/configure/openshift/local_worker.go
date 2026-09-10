@@ -2,12 +2,14 @@ package openshift
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/catalog/cli/configure"
 	catalogclient "github.com/project-ai-services/ai-services/internal/pkg/catalog/client"
 	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	runtimeOpenshift "github.com/project-ai-services/ai-services/internal/pkg/runtime/openshift"
+	workerconstants "github.com/project-ai-services/ai-services/internal/pkg/worker/constants"
 	workeropenshift "github.com/project-ai-services/ai-services/internal/pkg/worker/deploy/openshift"
 	workertypes "github.com/project-ai-services/ai-services/internal/pkg/worker/types"
 )
@@ -24,6 +26,12 @@ const (
 // obtaining a real bootstrap token without a second login.
 func JoinAsLocalWorker(ctx context.Context, rt *runtimeOpenshift.OpenshiftClient, c *catalogclient.Client) error {
 	logger.InfolnCtx(ctx, "Joining this machine as the Local worker...")
+
+	// deregister first in case of catalog re-run and ignore not found error
+	if err := catalogclient.NewWorkerClientFromClient(c).DeleteWorkerByName(ctx, workerconstants.LocalWorkerName); err != nil &&
+		!errors.Is(err, catalogclient.ErrWorkerNotFound) {
+		return fmt.Errorf("deregister local worker: %w", err)
+	}
 
 	token, gatewayAddr, err := configure.RegisterLocalWorker(ctx, c)
 	if err != nil {
