@@ -46,10 +46,9 @@ var ErrNamespaceNotFound = errors.New("namespace not found")
 var (
 	scheme = runtime.NewScheme()
 
-	// Singleton instances for all three clients, initialized together.
-	clientsOnce sync.Once
-	clientsErr  error
-
+	// clientsMu guards the three singleton clients so they can be rebuilt by
+	// Reinitialize without a sync.Once that can only ever fire once.
+	clientsMu               sync.Mutex
 	controllerRuntimeClient client.Client
 	kubeClient              *kubernetes.Clientset
 	routeClient             *routeclient.Clientset
@@ -111,42 +110,47 @@ func (kc *OpenshiftClient) WithNamespace(ns string) *OpenshiftClient {
 	return &copy
 }
 
-// initializeClients initializes all three clients once using sync.Once.
+// initializeClients builds the three k8s clients if they have not been built
+// yet. Idempotent: skips construction when kubeClient is already set.
 func initializeClients() error {
-	clientsOnce.Do(func() {
-		config, err := getKubeConfig()
-		if err != nil {
-			clientsErr = fmt.Errorf("failed to get openshift config: %w", err)
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
 
-			return
-		}
+	if kubeClient != nil {
+		return nil
+	}
 
-		// Initialize controller-runtime client
-		controllerRuntimeClient, err = client.New(config, client.Options{Scheme: scheme})
-		if err != nil {
-			clientsErr = fmt.Errorf("failed to create controller-runtime client: %w", err)
+	return buildClients()
+}
 
-			return
-		}
+// buildClients reads the kubeconfig and replaces the three package-level
+// client singletons. Must be called with clientsMu held.
+func buildClients() error {
+	config, err := getKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get openshift config: %w", err)
+	}
 
-		// Initialize Kubernetes clientset
-		kubeClient, err = kubernetes.NewForConfig(config)
-		if err != nil {
-			clientsErr = fmt.Errorf("failed to create openshift clientset: %w", err)
+	ctrlClient, err := client.New(config, client.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create controller-runtime client: %w", err)
+	}
 
-			return
-		}
+	kc, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create openshift clientset: %w", err)
+	}
 
-		// Initialize OpenShift Route client
-		routeClient, err = routeclient.NewForConfig(config)
-		if err != nil {
-			clientsErr = fmt.Errorf("failed to create openshift route clientset: %w", err)
+	rc, err := routeclient.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create openshift route clientset: %w", err)
+	}
 
-			return
-		}
-	})
+	controllerRuntimeClient = ctrlClient
+	kubeClient = kc
+	routeClient = rc
 
-	return clientsErr
+	return nil
 }
 
 // checkClusterAccessibility verifies that the cluster is accessible by making a simple API call.
@@ -155,6 +159,28 @@ func checkClusterAccessibility() error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// Reinitialize re-reads the kubeconfig, rebuilds all three k8s clients, and
+// updates the receiver's fields in place. Called by the worker dispatcher when
+// a command fails with Unauthorized (expired token on the kubeconfig fallback
+// path) so the next retry uses fresh credentials.
+func (kc *OpenshiftClient) Reinitialize() error {
+	clientsMu.Lock()
+	if err := buildClients(); err != nil {
+		clientsMu.Unlock()
+
+		return err
+	}
+
+	ctrl, kube, route := controllerRuntimeClient, kubeClient, routeClient
+	clientsMu.Unlock()
+
+	kc.Client = ctrl
+	kc.KubeClient = kube
+	kc.RouteClient = route
 
 	return nil
 }

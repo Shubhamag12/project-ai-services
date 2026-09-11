@@ -17,11 +17,13 @@ import (
 	"fmt"
 	"time"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/project-ai-services/ai-services/internal/pkg/cli/helpers"
 	helmutil "github.com/project-ai-services/ai-services/internal/pkg/helm"
+	"github.com/project-ai-services/ai-services/internal/pkg/logger"
 	"github.com/project-ai-services/ai-services/internal/pkg/runtime"
 	openshiftRuntime "github.com/project-ai-services/ai-services/internal/pkg/runtime/openshift"
 	"github.com/project-ai-services/ai-services/internal/pkg/utils"
@@ -38,7 +40,23 @@ import (
 func Dispatch(ctx context.Context, rt runtime.Runtime, pr *workercaddy.ProxyRouter, cmd *workerpb.Command) *workerpb.CommandResult {
 	data, err := handle(ctx, rt, pr, cmd)
 	if err != nil {
-		return failResult(cmd.GetCommandId(), err)
+		// When the k8s API rejects the call as Unauthorized (e.g. an expired
+		// token on the kubeconfig fallback path), rebuild the OpenShift client
+		// from a fresh kubeconfig read and retry the command once.
+		if oc, ok := rt.(*openshiftRuntime.OpenshiftClient); ok && k8serrors.IsUnauthorized(err) {
+			logger.WarningfCtx(ctx, "worker dispatch: Unauthorized error — reinitializing OpenShift client and retrying command %s\n", cmd.GetCommandId())
+
+			if reinitErr := oc.Reinitialize(); reinitErr != nil {
+				return failResult(cmd.GetCommandId(), fmt.Errorf("reauth failed: %w", reinitErr))
+			}
+
+			data, err = handle(ctx, rt, pr, cmd)
+			if err != nil {
+				return failResult(cmd.GetCommandId(), err)
+			}
+		} else {
+			return failResult(cmd.GetCommandId(), err)
+		}
 	}
 
 	return okResult(cmd.GetCommandId(), data)
